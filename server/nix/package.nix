@@ -1,8 +1,13 @@
+{ lib, buildDartApplication }:
+
 buildDartApplication rec {
-  pname = "dart-sass";
-  version = "1.62.1";
+  pname = "showcase-server";
+  version = "1.0.0";
 
-  src = ./.;
+  src = ./..;
+  # TODO
+  # dartCompileCommand = "dart --enable-experiment=macros build";
 
-  pubspecLock = lib.importJSON ./pubspec.lock.json;
+  # pubspecLock = lib.importJSON ./pubspec.lock.json;
+  autoPubspecLock = src + "/pubspec.lock";
 }
