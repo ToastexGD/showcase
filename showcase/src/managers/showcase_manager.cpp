@@ -198,7 +198,7 @@ void ShowcaseBotManager::loadPlayReplayButton(GJGameLevel *level, LevelInfoLayer
       {"gdVersion", "2.2074"},
   });
 
-  auto task = web::WebRequest().bodyJSON(requestBody).post("http://localhost:8080/get_submission");
+  auto task = web::WebRequest().bodyJSON(requestBody).post("https://showcase.flafy.dev/get_submission");
   m_getReplayListener.setFilter(task);
 }
 
@@ -498,7 +498,7 @@ void ShowcaseBotManager::tryUpload() {
       }
 
       auto task =
-          web::WebRequest().bodyJSON(requestBody).post("http://localhost:8080/upload_submissions");
+          web::WebRequest().bodyJSON(requestBody).post("https://showcase.flafy.dev/upload_submissions");
       m_uploadSubsReqListener.setFilter(task);
     } else if (web::WebProgress *progress = e->getProgress()) {
     } else if (e->isCancelled()) {
@@ -506,6 +506,6 @@ void ShowcaseBotManager::tryUpload() {
   });
 
   auto task =
-      web::WebRequest().bodyJSON(requestBody).post("http://localhost:8080/needed_submissions");
+      web::WebRequest().bodyJSON(requestBody).post("https://showcase.flafy.dev/needed_submissions");
   m_needSubsReqListener.setFilter(task);
 }

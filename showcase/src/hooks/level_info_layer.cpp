@@ -9,9 +9,16 @@ struct SBLevelInfoLayer : geode::Modify<SBLevelInfoLayer, LevelInfoLayer> {
 
     NodeIDs::provideFor(this);
 
-    auto playMenu = this->getChildByID("play-menu");
+    auto playMenu = static_cast<CCMenu*>(this->getChildByID("play-menu"));
+
+    if (playMenu == nullptr) {
+      log::info("play menu not found!");
+      return true;
+    }
 
     auto sprite = CircleButtonSprite::createWithSprite("clapper.png"_spr);
+
+    sprite->setScale(0.5f);
 
     auto btn = CCMenuItemSpriteExtra::create(
       sprite,
@@ -20,17 +27,18 @@ struct SBLevelInfoLayer : geode::Modify<SBLevelInfoLayer, LevelInfoLayer> {
     );
     btn->setID("play-replay-button");
     btn->setPosition({27.f, 27.f});
-    sprite->setScale(0.5f);
     btn->setZOrder(-2);
     btn->setVisible(false);
+    CCMenu *menu = CCMenu::create();
+    menu->setTouchPriority(playMenu->getTouchPriority()-1);
+    menu->setPosition(playMenu->getPosition());
+    menu->setContentSize(playMenu->getContentSize());
+    menu->setAnchorPoint(playMenu->getAnchorPoint());
+    menu->setZOrder(playMenu->getZOrder()+1);
+    menu->addChild(btn);
+    this->addChild(menu);
 
-    if (playMenu != nullptr) {
-      playMenu->addChild(btn);
-      ShowcaseBotManager::get()->loadPlayReplayButton(m_level, this, btn);
-    } else {
-      log::info("play menu not found!");
-    }
-
+    ShowcaseBotManager::get()->loadPlayReplayButton(m_level, this, btn);
 
     return true;
   }
