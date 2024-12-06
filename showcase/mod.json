@@ -1,0 +1,22 @@
+{
+  "geode": "4.0.1",
+  "gd": {
+    "win": "2.2074",
+    "android": "2.2074"
+  },
+  "id": "flafy.showcase",
+  "name": "showcase",
+  "version": "v1.0.0-alpha.1",
+  "developer": "Flafy",
+  "description": "Upload and play gameplay of any level",
+  "dependencies": [
+    {
+      "id": "geode.node-ids",
+      "version": ">=v1.18.0",
+      "importance": "required"
+    }
+  ],
+  "resources": {
+    "sprites": ["resources/clapper.png"]
+  }
+}
