@@ -146,8 +146,7 @@ class ShowcasePlayer {
     await winePrefixDir.create(recursive: true);
 
     _gdProcess = await Process.start(
-      /// TODO don't hardcode this
-      '/nix/store/9jd6ilmdyjbwk21lsk1qdraaj4hp18nr-cage-0.2.0/bin/cage',
+      'cage',
       [
         '--',
         'sh',
