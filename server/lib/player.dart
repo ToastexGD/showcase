@@ -59,6 +59,7 @@ class ShowcasePlayer {
   }
 
   Future<bool> _sendCommand(String commandName, Object arg) async {
+    print("Player: Sending command: $commandName. Arg: $arg");
     if (_clientSocket == null) return false;
     final sent = await futureTimeout(
       Future(() async {
@@ -70,6 +71,7 @@ class ShowcasePlayer {
       }),
       const Duration(seconds: 5),
     );
+    print("Player: sent: $sent");
     return sent == true;
   }
 
@@ -103,6 +105,7 @@ class ShowcasePlayer {
   }
 
   void _forceStopGD() {
+    print("Player: Force stopping GD... $_gdProcess");
     if (_gdProcess != null) {
       _gdProcess!.kill(ProcessSignal.sigkill);
       _gdProcess = null;
@@ -111,6 +114,7 @@ class ShowcasePlayer {
   }
 
   void _closeSocket() {
+    print("Player: Closing socket");
     _clientSocket?.close();
     _clientStreamIterator?.cancel();
     _serverSocket?.close();
@@ -120,6 +124,7 @@ class ShowcasePlayer {
   }
 
   Future<bool> _runGD({bool tryUseExisting = true}) async {
+    print("Player: Running GD... $_gdProcess");
     if (_gdProcess != null &&
         _serverSocket != null &&
         _clientSocket != null &&
@@ -145,6 +150,7 @@ class ShowcasePlayer {
 
     await winePrefixDir.create(recursive: true);
 
+    print("Player: Starting GD Processs...");
     _gdProcess = await Process.start(
       'cage',
       [
@@ -178,10 +184,12 @@ class ShowcasePlayer {
       }
     });
 
+    print("Player: Waiting on socket...");
     if (!await _establishSocket()) {
       _forceStopGD();
       return false;
     }
+    print("Player: Socket established!");
 
     return true;
   }

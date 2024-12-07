@@ -2,7 +2,7 @@
   description = "Temp";
 
   inputs = {
-    nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
+    nixpkgs.url = "github:NixOS/nixpkgs/4aa36568d413aca0ea84a1684d2d46f55dbabad7";
     flake-utils.url = "github:numtide/flake-utils";
   };
 
@@ -19,6 +19,8 @@
       devShell = pkgs.mkShell {
         nativeBuildInputs = with pkgs; [
           dart
+          wineWowPackages.unstable
+          cage
         ];
         shellHook = ''
           export LD_LIBRARY_PATH="$LD_LIBRARY_PATH:${pkgs.sqlite.out}/lib"

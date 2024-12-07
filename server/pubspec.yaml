@@ -6,7 +6,7 @@ executables:
   showcase_server: server
 
 environment:
-  sdk: ^3.5.4
+  sdk: ^3.5.3
 
 # Add regular dependencies here.
 dependencies:
@@ -21,6 +21,7 @@ dependencies:
   path: ^1.9.1
   convert: ^3.1.2
   collection: ^1.19.1
+  args: ^2.6.0
 
 dev_dependencies:
   lints: ^4.0.0

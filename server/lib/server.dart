@@ -134,7 +134,7 @@ class ShowcaseServer {
 
     playLevelsLoop();
 
-    io.serve(app.call, 'localhost', 8080).then((server) {
+    io.serve(app.call, '127.0.0.1', 8080).then((server) {
       this.server = server;
       print('Serving public at http://${server.address.host}:${server.port}');
     });
@@ -142,12 +142,13 @@ class ShowcaseServer {
 
   Future<void> playLevelsLoop() async {
     while (true) {
-      await Future.delayed(Duration(seconds: 5));
+      await Future.delayed(Duration(seconds: 2));
 
       final submission = await nextSubmissionInQueue();
       if (submission == null) {
         continue;
       }
+      print("Checking submission ID: ${submission.id} for level ${submission.levelID}.");
 
       final feedback = await player.playReplay(
         levelID: submission.levelID,
