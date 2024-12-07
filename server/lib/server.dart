@@ -125,10 +125,12 @@ class ShowcaseServer {
       if (body.gdVersion != gdVersion || body.modVersion != modVersion) {
         return Response.notFound("Bad gd/mod versions");
       }
+      print("Getting replay for level: ${body.levelID}");
       final submission = await getSubmissionForLevel(body.levelID);
       if (submission == null) {
         return Response.notFound("No replay found for level");
       }
+      print("Got valid replay");
       return Response.ok(base64.encode(submission.replayData!));
     });
 
@@ -226,8 +228,9 @@ class ShowcaseServer {
       return false;
     }
 
-    // not needed if user already has 10 submissions
+    // not needed if user already has 10 pending submissions
     final userSubmission = await (db.select(db.submissions)
+          ..where((tbl) => tbl.status.equals(SubmissionStatus.pendingReview.index))
           ..where((tbl) => tbl.gdAccountID.equals(accountID))
           ..limit(maxUserSubmissions))
         .get();

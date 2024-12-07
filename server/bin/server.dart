@@ -3,7 +3,6 @@ import 'package:args/args.dart';
 import 'package:server/server.dart';
 
 void main(List<String> arguments) {
-  // Create an ArgParser instance
   final parser = ArgParser()
     ..addOption(
       'gdDir',
