@@ -24,7 +24,7 @@
           nativeBuildInputs = with pkgs; [
             dart
             wineWowPackages.unstable
-            # cage
+            cage
           ];
           shellHook = ''
             export LD_LIBRARY_PATH="$LD_LIBRARY_PATH:${pkgs.sqlite.out}/lib"
