@@ -5,13 +5,13 @@ import 'package:server/server.dart';
 void main(List<String> arguments) {
   final parser = ArgParser()
     ..addOption(
-      'gdDir',
+      'gd-dir',
       abbr: 'g',
       mandatory: true,
       help: 'Path to the Geometry Dash data directory.',
     )
     ..addOption(
-      'dataDir',
+      'data-dir',
       abbr: 'd',
       mandatory: true,
       help: 'Path to the data directory.',
@@ -43,8 +43,8 @@ void main(List<String> arguments) {
   final headless = argResults['headless'] as bool;
 
   // Retrieve options
-  final gdDirPath = argResults['gdDir'] as String;
-  final dataDirPath = argResults['dataDir'] as String;
+  final gdDirPath = argResults['gd-dir'] as String;
+  final dataDirPath = argResults['data-dir'] as String;
 
   // Create directories
   final gdDir = Directory(gdDirPath).absolute;

@@ -5,8 +5,10 @@ buildDartApplication rec {
   version = "1.0.0";
 
   src = ./..;
-  # TODO
-  # dartCompileCommand = "dart --enable-experiment=macros build";
+
+  dartCompileFlags = [
+    "--enable-experiment=macros"
+  ];
 
   # pubspecLock = lib.importJSON ./pubspec.lock.json;
   autoPubspecLock = src + "/pubspec.lock";
