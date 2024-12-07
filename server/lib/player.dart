@@ -156,7 +156,7 @@ class ShowcasePlayer {
     _gdProcess = await Process.start(
       'cage',
       [
-        'wine64' '--', '${_gdExecutableFile.path}',
+        'wine64', '--', '${_gdExecutableFile.path}',
       ],
       workingDirectory: gdDir.path,
       environment: {
