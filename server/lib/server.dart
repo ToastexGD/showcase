@@ -107,6 +107,7 @@ class ShowcaseServer {
           return Response.forbidden('Replay hash mismatch');
         }
 
+        print("Added submission for level ${submission.metadata.levelID} by $accountID");
         db.into(db.submissions).insert(SubmissionsCompanion(
               levelID: Value(submission.metadata.levelID),
               status: Value(SubmissionStatus.pendingReview),
@@ -160,6 +161,7 @@ class ShowcaseServer {
         replayData: submission.replayData!,
         maxAttempts: 2,
       );
+      print("Done replaying(levelID: ${submission.levelID}). Feedback: $feedback");
       switch (feedback) {
         case ReplayFeedback.success:
           await acceptSubmission(submission.id);

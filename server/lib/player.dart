@@ -63,7 +63,11 @@ class ShowcasePlayer {
   Future<bool> _sendCommand(String commandName, Object arg) async {
     print("Player: Sending command: $commandName. Arg: $arg");
     if (_clientSocket == null) return false;
-    await _clientStreamIterator!.cancel();
+    try {
+      await _clientStreamIterator!.cancel();
+    } catch (e) {
+      print("Player: Error cancelling stream iterator: $e");
+    }
     final sent = await futureTimeout(
       Future(() async {
         final strData = "$commandName ${json.encode(arg)}";
@@ -89,7 +93,7 @@ class ShowcasePlayer {
           if (dataArrived != true) return null;
 
           final strData = utf8.decode(_clientStreamIterator!.current);
-          print("GOT: $strData");
+          print("Player: GOT: $strData");
           final separatorIndex = strData.indexOf(" ");
           if (separatorIndex == -1) {
             continue;
@@ -209,6 +213,8 @@ class ShowcasePlayer {
       ),
       const Duration(seconds: 30),
     );
+    print("Player: Done single internal feedback: $feedback");
+    print("Player: Attempts left: ${maxAttempts - 1}");
 
     if (feedback == null || feedback == ReplayFeedback.unknown) {
       return playReplay(
