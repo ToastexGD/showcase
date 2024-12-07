@@ -164,7 +164,12 @@ class ShowcasePlayer {
 
     await winePrefixDir.parent.create(recursive: true);
 
-    await copyPath(_winePrefixStartDir.path, winePrefixDir.path);
+    // await copyPath(_winePrefixStartDir.path, winePrefixDir.path);
+    final copyResult = await Process.run('cp', ['-R', _winePrefixStartDir.path, winePrefixDir.path]);
+    if (copyResult.exitCode != 0) {
+      throw Exception(
+          "Failed to copy. Error: ${copyResult.stderr.toString().trim()}");
+    }
 
     print("Player: Starting GD Processs...");
     _gdProcess = await Process.start(
@@ -238,7 +243,7 @@ class ShowcasePlayer {
       }
       return feedback;
     } catch (e, stacktrace) {
-      print("Player: Error playing replay: $e ${stacktrace}");
+      print("Player: Error playing replay: $e\n\n${stacktrace}");
       await _forceStopGD();
       return ReplayFeedback.unknown;
     }
