@@ -154,10 +154,7 @@ class ShowcasePlayer {
     _gdProcess = await Process.start(
       'cage',
       [
-        '--',
-        'sh',
-        '-c',
-        'echo WAYLAND:\$WAYLAND_DISPLAY && wine64 ${_gdExecutableFile.path}',
+        'wine64' '--', '${_gdExecutableFile.path}',
       ],
       workingDirectory: gdDir.path,
       environment: {
