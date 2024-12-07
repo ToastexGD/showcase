@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:path/path.dart' as path;
 import 'dart:convert';
 import 'dart:io';
+import 'package:io/io.dart';
 import 'dart:typed_data';
 
 import 'package:server/utils/future_timeout.dart';
@@ -11,6 +12,7 @@ enum ReplayFeedback {
   userBadInput,
   replayFailed,
   unknown,
+  timedOut,
 }
 
 class ShowcasePlayer {
@@ -33,6 +35,8 @@ class ShowcasePlayer {
   File get _gdExecutableFile => File(path.join(gdDir.path, "GeometryDash.exe"));
   Directory get _winePrefixUserDir =>
       Directory(path.join(winePrefixDir.path, "drive_c/users/showcase"));
+  Directory get _winePrefixStartDir =>
+      Directory(path.join(winePrefixDir.parent.path, "wine_prefix_start"));
 
   File _getReplayQueueFile(int levelID) {
     return File(path.join(
@@ -114,20 +118,20 @@ class ShowcasePlayer {
     );
   }
 
-  void _forceStopGD() {
+  Future<void> _forceStopGD() async {
     print("Player: Force stopping GD... $_gdProcess");
     if (_gdProcess != null) {
       _gdProcess!.kill(ProcessSignal.sigkill);
       _gdProcess = null;
-      _closeSocket();
+      await _closeSocket();
     }
   }
 
-  void _closeSocket() {
+  Future<void> _closeSocket() async {
     print("Player: Closing socket");
-    _clientSocket?.close();
-    _clientStreamIterator?.cancel();
-    _serverSocket?.close();
+    await _clientSocket?.close();
+    await _clientStreamIterator?.cancel();
+    await _serverSocket?.close();
     _clientSocket = null;
     _clientStreamIterator = null;
     _serverSocket = null;
@@ -152,13 +156,15 @@ class ShowcasePlayer {
       }
     }
 
-    _forceStopGD();
+    await _forceStopGD();
 
-    if (await _winePrefixUserDir.exists()) {
-      await _winePrefixUserDir.delete(recursive: true);
+    if (await winePrefixDir.exists()) {
+      await winePrefixDir.delete(recursive: true);
     }
 
-    await winePrefixDir.create(recursive: true);
+    await winePrefixDir.parent.create(recursive: true);
+
+    await copyPath(_winePrefixStartDir.path, winePrefixDir.path);
 
     print("Player: Starting GD Processs...");
     _gdProcess = await Process.start(
@@ -194,7 +200,7 @@ class ShowcasePlayer {
 
     print("Player: Waiting on socket...");
     if (!await _establishSocket()) {
-      _forceStopGD();
+      await _forceStopGD();
       return false;
     }
     print("Player: Socket established!");
@@ -207,26 +213,35 @@ class ShowcasePlayer {
     required Uint8List replayData,
     int maxAttempts = 2,
   }) async {
-    if (maxAttempts == 0) return ReplayFeedback.unknown;
+    try {
+      if (maxAttempts == 0) return ReplayFeedback.unknown;
 
-    final feedback = await futureTimeout(
-      _playReplayInternal(
-        levelID: levelID,
-        replayData: replayData,
-      ),
-      const Duration(seconds: 50),
-    );
-    print("Player: Done single internal feedback: $feedback");
-    print("Player: Attempts left: ${maxAttempts - 1}");
-
-    if (feedback == null || feedback == ReplayFeedback.unknown) {
-      return playReplay(
-        levelID: levelID,
-        replayData: replayData,
-        maxAttempts: maxAttempts - 1,
+      var feedback = await futureTimeout(
+        _playReplayInternal(
+          levelID: levelID,
+          replayData: replayData,
+        ),
+        const Duration(seconds: 50),
       );
+      print("Player: Done single internal feedback: $feedback");
+      print("Player: Attempts left: ${maxAttempts - 1}");
+      if (feedback == null) {
+        feedback = ReplayFeedback.timedOut;
+      }
+
+      if (feedback == ReplayFeedback.unknown) {
+        return playReplay(
+          levelID: levelID,
+          replayData: replayData,
+          maxAttempts: maxAttempts - 1,
+        );
+      }
+      return feedback;
+    } catch (e, stacktrace) {
+      print("Player: Error playing replay: $e ${stacktrace}");
+      await _forceStopGD();
+      return ReplayFeedback.unknown;
     }
-    return feedback;
   }
 
   // Plays a replay and returns success
@@ -236,11 +251,13 @@ class ShowcasePlayer {
   }) async {
     // Run GD and make sure it's ready
     if (!await _runGD()) {
+      await _forceStopGD();
       return ReplayFeedback.unknown;
     }
 
     // Tell the client the levelID
     if (!await _sendCommand("server_goto_level", {"levelID": levelID})) {
+      await _forceStopGD();
       return ReplayFeedback.unknown;
     }
 
@@ -249,12 +266,16 @@ class ShowcasePlayer {
         await _waitForCommand("client_level_valid", const Duration(seconds: 20))
             as Map<String, dynamic>?;
     if (levelValidInfo == null || levelValidInfo["levelID"] != levelID) {
+      await _forceStopGD();
       return ReplayFeedback.unknown;
     }
 
     if (!(levelValidInfo["found"] as bool) ||
         !(levelValidInfo["valid"] as bool)) {
-      return ReplayFeedback.userBadInput;
+      await _forceStopGD();
+      // TODO: For now if a level is not found then dont blame user
+      // return ReplayFeedback.userBadInput;
+      return ReplayFeedback.replayFailed;
     }
 
     // Write GDR file
@@ -271,6 +292,7 @@ class ShowcasePlayer {
         await _waitForCommand("client_replay_result", Duration(seconds: 30))
             as Map<String, dynamic>?;
     if (replayResult == null || (replayResult["levelID"] as int) != levelID) {
+      await _forceStopGD();
       return ReplayFeedback.unknown;
     }
 

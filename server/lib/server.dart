@@ -149,39 +149,45 @@ class ShowcaseServer {
   Future<void> playLevelsLoop() async {
     while (true) {
       await Future.delayed(Duration(seconds: 2));
+      try {
+        final submission = await nextSubmissionInQueue();
 
-      final submission = await nextSubmissionInQueue();
+        if (submission == null) {
+          continue;
+        }
 
-      print("Checking submission ID: ${submission?.id} for level ${submission?.levelID}.");
+        print("Checking submission ID: ${submission.id} for level ${submission.levelID}.");
 
-      if (submission == null) {
-        continue;
-      }
-
-      final feedback = await player.playReplay(
-        levelID: submission.levelID,
-        replayData: submission.replayData!,
-        maxAttempts: 2,
-      );
-      print("Done replaying(levelID: ${submission.levelID}). Feedback: $feedback");
-      switch (feedback) {
-        case ReplayFeedback.success:
-          await acceptSubmission(submission.id);
-          break;
-        case ReplayFeedback.userBadInput:
-          await addBadPoint(
-            submission.gdAccountID,
-            "Bad point during replay check. Probably replay for an invalid level.",
-          );
-          await rejectSubmission(submission.id, "Bad point given.");
-          break;
-        case ReplayFeedback.replayFailed:
-          await rejectSubmission(
-              submission.id, "Tried to play replay and failed");
-          break;
-        case ReplayFeedback.unknown:
-          await rejectSubmission(submission.id, "Unknown reason for failing.");
-          break;
+        final feedback = await player.playReplay(
+          levelID: submission.levelID,
+          replayData: submission.replayData!,
+          maxAttempts: 2,
+        );
+        print("Done replaying(levelID: ${submission.levelID}). Feedback: $feedback");
+        switch (feedback) {
+          case ReplayFeedback.success:
+            await acceptSubmission(submission.id);
+            break;
+          case ReplayFeedback.userBadInput:
+            await addBadPoint(
+              submission.gdAccountID,
+              "Bad point during replay check. Probably replay for an invalid level.",
+            );
+            await rejectSubmission(submission.id, "Bad point given.");
+            break;
+          case ReplayFeedback.replayFailed:
+            await rejectSubmission(
+                submission.id, "Tried to play replay and failed");
+            break;
+          case ReplayFeedback.unknown:
+            await rejectSubmission(submission.id, "Unknown reason for failing.");
+            break;
+          case ReplayFeedback.timedOut:
+            await rejectSubmission(submission.id, "Timed out.");
+            break;
+        }
+      } catch (e, stacktrace) {
+        print("Play levels loop failed: ${e}\n\nStacktrace: ${stacktrace}");
       }
     }
   }
