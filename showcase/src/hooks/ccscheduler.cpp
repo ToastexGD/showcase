@@ -5,7 +5,7 @@
 
 struct SBCCScheduler : geode::Modify<SBCCScheduler, CCScheduler> {
   virtual void update(float dt) {
-    if (ShowcaseAutoManager::get(false) != nullptr &&
+    if (false && ShowcaseAutoManager::get(false) != nullptr &&
         ShowcaseAutoManager::get()->m_autoEnabled &&
         ShowcaseBotManager::get()->m_state == ShowcaseBotState::Playing && PlayLayer::get()) {
       CCScheduler::update(dt * 50.0f);

@@ -63,6 +63,7 @@ class ShowcasePlayer {
   Future<bool> _sendCommand(String commandName, Object arg) async {
     print("Player: Sending command: $commandName. Arg: $arg");
     if (_clientSocket == null) return false;
+    await _clientStreamIterator!.cancel();
     final sent = await futureTimeout(
       Future(() async {
         final strData = "$commandName ${json.encode(arg)}";
@@ -172,10 +173,16 @@ class ShowcasePlayer {
     );
 
     _gdProcess!.stderr.listen((event) {
-      print(String.fromCharCodes(event));
+      // print(String.fromCharCodes(event));
     });
     _gdProcess!.stdout.listen((event) {
-      print(String.fromCharCodes(event));
+      // print(String.fromCharCodes(event));
+      final stdoutLines = String.fromCharCodes(event).split("\n");
+      for (final line in stdoutLines) {
+        if (line.contains("[showcase]")) {
+          print(line);
+        }
+      }
     });
 
     print("Player: Waiting on socket...");

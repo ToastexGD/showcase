@@ -18,8 +18,13 @@ void ShowcaseAutoManager::setAutoSettings(float dt) {
     if (CCApplication::sharedApplication()->getVerticalSyncEnabled()) {
       CCApplication::sharedApplication()->toggleVerticalSync(false);
     }
-    // Run at 2 fps
-    CCDirector::sharedDirector()->setAnimationInterval(1.f / 2.f);
+    // if (ShowcaseBotManager::get()->m_state == ShowcaseBotState::Playing && PlayLayer::get()) {
+    //   // Run at 2 fps
+    //   CCDirector::sharedDirector()->setAnimationInterval(1.f / 2.f);
+    // } else {
+    //   // Run at 30 fps
+    //   CCDirector::sharedDirector()->setAnimationInterval(1.f / 30.f);
+    // }
     // Set texture to LOW (only applies after launch and doesn't save between restarts)
     CCDirector::sharedDirector()->updateContentScale(TextureQuality::kTextureQualityLow);
   }
