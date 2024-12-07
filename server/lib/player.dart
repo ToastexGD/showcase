@@ -16,6 +16,7 @@ enum ReplayFeedback {
 class ShowcasePlayer {
   final Directory gdDir;
   final Directory winePrefixDir;
+  final bool headless;
 
   ServerSocket? _serverSocket;
   Socket? _clientSocket;
@@ -25,6 +26,7 @@ class ShowcasePlayer {
   ShowcasePlayer({
     required this.gdDir,
     required this.winePrefixDir,
+    required this.headless,
   });
 
   File get _gdExecutableFile => File(path.join(gdDir.path, "GeometryDash.exe"));
@@ -163,22 +165,17 @@ class ShowcasePlayer {
         "WINEDLLOVERRIDES": "XInput1_4.dll=n,b",
         "USER": "showcase", // Scary?
         // Headless
-        "WLR_HEADLESS_OUTPUTS": "1",
-        "WLR_BACKENDS": "headless",
-        "WLR_LIBINPUT_NO_DEVICES": "1",
+        if (headless) "WLR_HEADLESS_OUTPUTS": "1",
+        if (headless) "WLR_BACKENDS": "headless",
+        if (headless) "WLR_LIBINPUT_NO_DEVICES": "1",
       },
     );
 
     _gdProcess!.stderr.listen((event) {
-      // print(String.fromCharCodes(event));
+      print(String.fromCharCodes(event));
     });
     _gdProcess!.stdout.listen((event) {
-      final stdoutLines = String.fromCharCodes(event).split("\n");
-      for (final line in stdoutLines) {
-        if (line.contains("[showcase]")) {
-          print(line);
-        }
-      }
+      print(String.fromCharCodes(event));
     });
 
     print("Player: Waiting on socket...");

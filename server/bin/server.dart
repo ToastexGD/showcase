@@ -17,6 +17,12 @@ void main(List<String> arguments) {
       help: 'Path to the data directory.',
     )
     ..addFlag(
+      'headless',
+      negatable: true,
+      defaultsTo: true,
+      help: 'Run GD in headless mode.',
+    )
+    ..addFlag(
       'help',
       abbr: 'h',
       negatable: false,
@@ -33,6 +39,9 @@ void main(List<String> arguments) {
     exit(0);
   }
 
+  // Retrieve flags
+  final headless = argResults['headless'] as bool;
+
   // Retrieve options
   final gdDirPath = argResults['gdDir'] as String;
   final dataDirPath = argResults['dataDir'] as String;
@@ -45,5 +54,6 @@ void main(List<String> arguments) {
   ShowcaseServer(
     gdDir: gdDir,
     dataDir: dataDir,
+    headless: headless,
   );
 }

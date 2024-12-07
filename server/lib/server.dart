@@ -27,6 +27,7 @@ class ShowcaseServer {
   late final ShowcaseDatabase db;
   late final ShowcasePlayer player;
   final Directory dataDir;
+  final bool headless;
 
   Directory get winePrefixDir =>
       Directory(path.join(dataDir.path, "wine_prefix"));
@@ -35,6 +36,7 @@ class ShowcaseServer {
   ShowcaseServer({
     required Directory gdDir,
     required this.dataDir,
+    required this.headless,
   }) {
     winePrefixDir.create(recursive: true);
     sqliteFile.parent.create(recursive: true);
@@ -43,6 +45,7 @@ class ShowcaseServer {
     player = ShowcasePlayer(
       gdDir: gdDir,
       winePrefixDir: winePrefixDir,
+      headless: headless,
     );
 
     final app = Router();
