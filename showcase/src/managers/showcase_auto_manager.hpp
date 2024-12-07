@@ -9,12 +9,15 @@ protected:
   std::optional<SOCKET> m_clientSocket = std::nullopt;
   std::thread m_thread;
 
+  int m_levelRestarts = 0;
+
   bool init() override;
   bool createSocket();
 
   bool sendCommand(const std::string& commandName, const matjson::Value& arg);
   void onCommand(const std::string& commandName, matjson::Value arg);
 
+  void setAutoSettings(float dt);
 public:
   bool m_autoEnabled = false;
 

@@ -1,14 +1,35 @@
 #include "showcase_auto_manager.hpp"
 #include "../utils/get_level_by_id.hpp"
+#include "Geode/binding/FMODAudioEngine.hpp"
 #include "Geode/binding/LevelInfoLayer.hpp"
 #include "Geode/cocos/CCDirector.h"
 #include "Geode/loader/Loader.hpp"
+#include "ccMacros.h"
 #include "showcase_manager.hpp"
 #include <matjson.hpp>
+
+
+void ShowcaseAutoManager::setAutoSettings(float dt) {
+  if (m_autoEnabled) {
+    // Mute audio
+    FMODAudioEngine::get()->setEffectsVolume(0.f);
+    FMODAudioEngine::get()->setBackgroundMusicVolume(0.f);
+    // Disable VSync
+    if (CCApplication::sharedApplication()->getVerticalSyncEnabled()) {
+      CCApplication::sharedApplication()->toggleVerticalSync(false);
+    }
+    // Run at 2 fps
+    CCDirector::sharedDirector()->setAnimationInterval(1.f / 2.f);
+    // Set texture to LOW (only applies after launch and doesn't save between restarts)
+    CCDirector::sharedDirector()->updateContentScale(TextureQuality::kTextureQualityLow);
+  }
+}
 
 bool ShowcaseAutoManager::init() {
   if (!CCNode::init())
     return false;
+
+  this->getScheduler()->scheduleSelector(schedule_selector(ShowcaseAutoManager::setAutoSettings), this, 1.f, kCCRepeatForever, 0, false);
 
   if (createSocket()) {
     m_autoEnabled = true;
@@ -101,6 +122,7 @@ void ShowcaseAutoManager::onCommand(const std::string &commandName, matjson::Val
     }
     ShowcaseBotManager::get()->loadReplyFromQueueFile(levelID);
     ShowcaseBotManager::get()->m_state = ShowcaseBotState::Playing;
+    m_levelRestarts = 0;
     levelInfoLayer->onPlay(nullptr);
   }
 }
@@ -120,10 +142,13 @@ bool ShowcaseAutoManager::onLevelComplete(PlayLayer *playLayer) {
 }
 
 void ShowcaseAutoManager::onLevelRestart(PlayLayer *playLayer) {
-  int currentFrame = playLayer->m_gameState.m_currentProgress;
-  if (currentFrame < 2) return;
+  log::info("Level restart {}", m_levelRestarts);
 
-  log::info("Level restart...? {}", currentFrame);
+  m_levelRestarts += 1;
+  if (m_levelRestarts < 2) {
+    return;
+  }
+
   if (!m_clientSocket.has_value())
     return;
 
@@ -132,8 +157,6 @@ void ShowcaseAutoManager::onLevelRestart(PlayLayer *playLayer) {
                                           {"finished", false},
                                       }));
   playLayer->onQuit();
-
-  return;
 }
 
 bool ShowcaseAutoManager::createSocket() {

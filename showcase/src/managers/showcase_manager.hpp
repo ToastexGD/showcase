@@ -5,6 +5,11 @@
 #include "../models/bot.hpp"
 #include "showcase_auto_manager.hpp"
 
+#define SHOWCASE_SERVER "https://showcase.flafy.dev"
+#define DASHAUTH_SERVER "https://dashend.firee.dev"
+// #define SHOWCASE_SERVER "http://127.0.0.1:8080"
+// #define DASHAUTH_SERVER "http://127.0.0.1:3002"
+
 enum class ShowcaseBotState {
   Idle,
   Recording,

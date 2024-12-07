@@ -5,7 +5,10 @@
 #include "Geode/GeneratedPredeclare.hpp"
 #include "Geode/binding/FLAlertLayer.hpp"
 #include "Geode/binding/GJGameLevel.hpp"
+#include "Geode/binding/GameManager.hpp"
 #include "Geode/binding/LevelInfoLayer.hpp"
+#include "Geode/binding/VideoOptionsLayer.hpp"
+#include "Geode/cocos/cocoa/CCObject.h"
 #include "Geode/loader/Event.hpp"
 #include "Geode/loader/Log.hpp"
 #include "Geode/utils/web.hpp"
@@ -50,8 +53,12 @@ bool ShowcaseBotManager::init() {
 
 void ShowcaseBotManager::sendAcceptTerms() {
   auto popup = geode::createQuickPopup(
-      "Showcase - Terms", "The Showcase mod records your gameplay inputs on rated levels and sends them to an external server to potentially be added officially into the mod."
-      "\nBy Pressing accept, you agree for this to happpen and to automatically be authenticated with DashAuth.", "No", "Agree",
+      "Showcase - Terms",
+      "The Showcase mod records your gameplay inputs on rated levels and sends them to an external "
+      "server to potentially be added officially into the mod."
+      "\nBy Pressing accept, you agree for this to happpen and to automatically be authenticated "
+      "with DashAuth.",
+      "No", "Agree",
       [this](FLAlertLayer *layer, bool btn2) {
         if (btn2) {
           Mod::get()->setSavedValue<bool>("terms-accepted", true);
@@ -130,11 +137,11 @@ void ShowcaseBotManager::verifyToken() {
     auto task = web::WebRequest()
                     .header("Content-Type", "application/json")
                     .bodyJSON(requestBody)
-                    .post("https://dashend.firee.dev/api/v1/verify");
+                    .post(fmt::format("{}/api/v1/verify", DASHAUTH_SERVER));
     m_verifyDashauthTokenListener.setFilter(task);
   } else {
     dashauth::DashAuthRequest()
-        .getToken(Mod::get(), "https://dashend.firee.dev/api/v1")
+        .getToken(Mod::get(), fmt::format("{}/api/v1", DASHAUTH_SERVER))
         ->except([](const std::string &reason) {
           FLAlertLayer::create("Showcase - DashAuth Error",
                                fmt::format("Failed to get token. Reason: {}", reason), "OK")
@@ -181,8 +188,9 @@ void ShowcaseBotManager::loadPlayReplayButton(GJGameLevel *level, LevelInfoLayer
           }
           log::info("Got replay for level.");
           // TODO make sure current scene is still level info layer
-          // auto foundLevelInfoLayer = CCDirector::get()->getRunningScene()->getChildByID("LevelInfoLayer");
-          // log::info("Level Info Layer: {}", foundLevelInfoLayer);
+          // auto foundLevelInfoLayer =
+          // CCDirector::get()->getRunningScene()->getChildByID("LevelInfoLayer"); log::info("Level
+          // Info Layer: {}", foundLevelInfoLayer);
           auto rawReplayDataStr = base64::from_base64(value->string().unwrap());
           std::vector<uint8_t> rawReplayData(rawReplayDataStr.begin(), rawReplayDataStr.end());
 
@@ -198,7 +206,9 @@ void ShowcaseBotManager::loadPlayReplayButton(GJGameLevel *level, LevelInfoLayer
       {"gdVersion", "2.2074"},
   });
 
-  auto task = web::WebRequest().bodyJSON(requestBody).post("https://showcase.flafy.dev/get_submission");
+  auto task = web::WebRequest()
+                  .bodyJSON(requestBody)
+                  .post(fmt::format("{}/get_submission", SHOWCASE_SERVER));
   m_getReplayListener.setFilter(task);
 }
 
@@ -211,7 +221,7 @@ void ShowcaseBotManager::onPlayReplayPressed(LevelInfoLayer *levelInfoLayer) {
   m_replay = m_loadedReplay.value();
 }
 
-void ShowcaseBotManager::onLevelExit(PlayLayer* playLayer) {
+void ShowcaseBotManager::onLevelExit(PlayLayer *playLayer) {
 
   clearReplay();
   m_state =
@@ -226,7 +236,7 @@ void ShowcaseBotManager::onCommandProcessed(GJBaseGameLayer *baseGameLayer) {
   case ShowcaseBotState::Playing:
     int currentFrame = baseGameLayer->m_gameState.m_currentProgress;
 
-    for (const gdr::Input& input : getInputs(currentFrame)) {
+    for (const gdr::Input &input : getInputs(currentFrame)) {
       baseGameLayer->handleButton(input.down, static_cast<int>(input.button), !input.player2);
     }
     return;
@@ -256,7 +266,7 @@ bool ShowcaseBotManager::onLevelComplete(PlayLayer *playLayer) {
   }
 }
 
-bool ShowcaseBotManager::shouldLevelBeReplay(GJGameLevel* level) {
+bool ShowcaseBotManager::shouldLevelBeReplay(GJGameLevel *level) {
   int levelID = level->m_levelID.value();
   bool isRated = level->m_stars.value() >= 2;
   bool isClassic = true; // TODO
@@ -497,15 +507,17 @@ void ShowcaseBotManager::tryUpload() {
         return;
       }
 
-      auto task =
-          web::WebRequest().bodyJSON(requestBody).post("https://showcase.flafy.dev/upload_submissions");
+      auto task = web::WebRequest()
+                      .bodyJSON(requestBody)
+                      .post(fmt::format("{}/upload_submissions", SHOWCASE_SERVER));
       m_uploadSubsReqListener.setFilter(task);
     } else if (web::WebProgress *progress = e->getProgress()) {
     } else if (e->isCancelled()) {
     }
   });
 
-  auto task =
-      web::WebRequest().bodyJSON(requestBody).post("https://showcase.flafy.dev/needed_submissions");
+  auto task = web::WebRequest()
+                  .bodyJSON(requestBody)
+                  .post(fmt::format("{}/needed_submissions", SHOWCASE_SERVER));
   m_needSubsReqListener.setFilter(task);
 }

@@ -1,14 +1,14 @@
 {
   "geode": "4.0.1",
   "gd": {
-    "win": "2.2074",
-    "android": "2.2074"
+    "win": "2.2074"
   },
   "id": "flafy.showcase",
   "name": "showcase",
   "version": "v1.0.0-alpha.1",
   "developer": "Flafy",
-  "description": "Upload and play gameplay of any level",
+  "description": "Upload and play gameplay of rated levels",
+  "tags": ["online", "modtober24"],
   "dependencies": [
     {
       "id": "geode.node-ids",
