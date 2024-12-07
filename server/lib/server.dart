@@ -336,16 +336,15 @@ class ShowcaseServer {
   }
 
   Future<void> addBadPoint(int accountID, String reason) async {
-    // TODO: uncomment this
-    // final formattedReason = "\n\n${DateTime.now().toIso8601String()}: $reason";
-    // final editUserQuery = await (db.update(db.users)
-    //       ..where((tbl) => tbl.accountID.equals(accountID)))
-    //     .write(UsersCompanion.custom(
-    //   badPoints: db.users.badPoints + Variable(1),
-    //   badPointsLog: db.users.badPointsLog + Variable(formattedReason),
-    // ));
-    // if (editUserQuery != 1) {
-    //   throw Exception("Failed to add bad point");
-    // }
+    final formattedReason = "\n\n${DateTime.now().toIso8601String()}: $reason";
+    final editUserQuery = await (db.update(db.users)
+          ..where((tbl) => tbl.accountID.equals(accountID)))
+        .write(UsersCompanion.custom(
+      badPoints: db.users.badPoints + Variable(1),
+      badPointsLog: db.users.badPointsLog + Variable(formattedReason),
+    ));
+    if (editUserQuery != 1) {
+      throw Exception("Failed to add bad point");
+    }
   }
 }
