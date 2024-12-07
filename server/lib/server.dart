@@ -151,10 +151,12 @@ class ShowcaseServer {
       await Future.delayed(Duration(seconds: 2));
 
       final submission = await nextSubmissionInQueue();
+
+      print("Checking submission ID: ${submission?.id} for level ${submission?.levelID}.");
+
       if (submission == null) {
         continue;
       }
-      print("Checking submission ID: ${submission.id} for level ${submission.levelID}.");
 
       final feedback = await player.playReplay(
         levelID: submission.levelID,

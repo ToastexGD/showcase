@@ -20,6 +20,7 @@ class ShowcasePlayer {
 
   ServerSocket? _serverSocket;
   Socket? _clientSocket;
+  Stream<Uint8List>? _clientBroadcastStream;
   StreamIterator<Uint8List>? _clientStreamIterator;
   Process? _gdProcess;
 
@@ -51,7 +52,8 @@ class ShowcasePlayer {
     }
     _serverSocket = serverSocket;
     _clientSocket = clientSocket;
-    _clientStreamIterator = StreamIterator(clientSocket.asBroadcastStream());
+    _clientBroadcastStream = _clientSocket!.asBroadcastStream();
+    _clientStreamIterator = StreamIterator(_clientBroadcastStream!);
 
     if (await _waitForCommand("client_connected") != 0) {
       return false;
@@ -65,8 +67,9 @@ class ShowcasePlayer {
     if (_clientSocket == null) return false;
     try {
       await _clientStreamIterator!.cancel();
+      _clientStreamIterator = StreamIterator(_clientBroadcastStream!);
     } catch (e) {
-      print("Player: Error cancelling stream iterator: $e");
+      print("Player: Error cancelling and remaking stream iterator: $e");
     }
     final sent = await futureTimeout(
       Future(() async {
@@ -211,7 +214,7 @@ class ShowcasePlayer {
         levelID: levelID,
         replayData: replayData,
       ),
-      const Duration(seconds: 30),
+      const Duration(seconds: 50),
     );
     print("Player: Done single internal feedback: $feedback");
     print("Player: Attempts left: ${maxAttempts - 1}");
@@ -265,7 +268,7 @@ class ShowcasePlayer {
     await _sendCommand("server_play_level", {"levelID": levelID});
 
     final replayResult =
-        await _waitForCommand("client_replay_result", Duration(seconds: 10))
+        await _waitForCommand("client_replay_result", Duration(seconds: 30))
             as Map<String, dynamic>?;
     if (replayResult == null || (replayResult["levelID"] as int) != levelID) {
       return ReplayFeedback.unknown;
