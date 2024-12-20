@@ -1,12 +1,12 @@
 import 'dart:convert';
 import 'package:collection/collection.dart';
-import 'package:convert/convert.dart';
 import 'package:path/path.dart' as path;
 import 'package:http/http.dart' as http;
 import 'dart:io';
 import 'package:crypto/crypto.dart';
 
 import 'package:drift/drift.dart';
+import 'package:server/models/auth.dart';
 import 'package:server/models/requests.dart';
 import 'package:server/models/database.dart';
 import 'package:server/player.dart';
@@ -28,6 +28,7 @@ class ShowcaseServer {
   late final ShowcasePlayer player;
   final Directory dataDir;
   final bool headless;
+  final Map<String, CachedAuthTokenData> cachedTokens;
 
   Directory get winePrefixDir =>
       Directory(path.join(dataDir.path, "wine_prefix"));
@@ -37,7 +38,7 @@ class ShowcaseServer {
     required Directory gdDir,
     required this.dataDir,
     required this.headless,
-  }) {
+  }) : cachedTokens = {} {
     winePrefixDir.create(recursive: true);
     sqliteFile.parent.create(recursive: true);
 
@@ -107,7 +108,8 @@ class ShowcaseServer {
           return Response.forbidden('Replay hash mismatch');
         }
 
-        print("Added submission for level ${submission.metadata.levelID} by $accountID");
+        print(
+            "Added submission for level ${submission.metadata.levelID} by $accountID");
         db.into(db.submissions).insert(SubmissionsCompanion(
               levelID: Value(submission.metadata.levelID),
               status: Value(SubmissionStatus.pendingReview),
@@ -156,14 +158,27 @@ class ShowcaseServer {
           continue;
         }
 
-        print("Checking submission ID: ${submission.id} for level ${submission.levelID}.");
+        print(
+            "Checking submission ID: ${submission.id} for level ${submission.levelID}.");
 
-        final feedback = await player.playReplay(
-          levelID: submission.levelID,
-          replayData: submission.replayData!,
-          maxAttempts: 2,
-        );
-        print("Done replaying(levelID: ${submission.levelID}). Feedback: $feedback");
+        ReplayFeedback feedback = ReplayFeedback.unknown;
+
+        if (!await isSubmissionNeeded(
+          RequestSubmissionMetadata.fromDBSubmission(submission),
+          submission.gdAccountID,
+          alreadyAdded: true,
+        )) {
+          feedback = ReplayFeedback.notNeeded;
+        } else {
+          feedback = await player.playReplay(
+            levelID: submission.levelID,
+            replayData: submission.replayData!,
+            maxAttempts: 2,
+          );
+        }
+
+        print(
+            "Done checking(levelID: ${submission.levelID}). Feedback: $feedback");
         switch (feedback) {
           case ReplayFeedback.success:
             await acceptSubmission(submission.id);
@@ -180,10 +195,14 @@ class ShowcaseServer {
                 submission.id, "Tried to play replay and failed");
             break;
           case ReplayFeedback.unknown:
-            await rejectSubmission(submission.id, "Unknown reason for failing.");
+            await rejectSubmission(
+                submission.id, "Unknown reason for failing.");
             break;
           case ReplayFeedback.timedOut:
             await rejectSubmission(submission.id, "Timed out.");
+            break;
+          case ReplayFeedback.notNeeded:
+            await rejectSubmission(submission.id, "Not needed.");
             break;
         }
       } catch (e, stacktrace) {
@@ -219,8 +238,9 @@ class ShowcaseServer {
 
   Future<bool> isSubmissionNeeded(
     RequestSubmissionMetadata metadata,
-    int accountID,
-  ) async {
+    int accountID, {
+    bool alreadyAdded = false,
+  }) async {
     if (metadata.gdVersion != gdVersion) return false;
     if (metadata.modVersion != modVersion) return false;
 
@@ -242,13 +262,16 @@ class ShowcaseServer {
     }
 
     // not needed if user already has 10 pending submissions
-    final userSubmission = await (db.select(db.submissions)
-          ..where((tbl) => tbl.status.equals(SubmissionStatus.pendingReview.index))
-          ..where((tbl) => tbl.gdAccountID.equals(accountID))
-          ..limit(maxUserSubmissions))
-        .get();
-    if (userSubmission.length >= maxUserSubmissions) {
-      return false;
+    if (!alreadyAdded) {
+      final userSubmission = await (db.select(db.submissions)
+            ..where((tbl) =>
+                tbl.status.equals(SubmissionStatus.pendingReview.index))
+            ..where((tbl) => tbl.gdAccountID.equals(accountID))
+            ..limit(maxUserSubmissions))
+          .get();
+      if (userSubmission.length >= maxUserSubmissions) {
+        return false;
+      }
     }
 
     return true;
@@ -256,35 +279,63 @@ class ShowcaseServer {
 
   Future<int?> authenticateUser(String dashAuthToken) async {
     final client = http.Client();
-    final dashAuthResponse = await client.post(
-      Uri.parse("$baseDashAuthUrl/verify"),
-      headers: {"Content-Type": "application/json"},
-      body: jsonEncode({"token": dashAuthToken}),
-    );
 
-    if (dashAuthResponse.statusCode != 200) {
-      return null;
+    int? confirmedAccountID;
+    String? confirmedAccountUsername;
+
+    if (cachedTokens.containsKey(dashAuthToken)) {
+      final cachedTokenData = cachedTokens[dashAuthToken]!;
+      if (DateTime.now().isAfter(cachedTokenData.tokenExpiration)) {
+        cachedTokens.remove(dashAuthToken);
+      } else {
+        confirmedAccountID = cachedTokenData.accountID;
+        confirmedAccountUsername = cachedTokenData.cachedAccountUsername;
+      }
     }
 
-    final body = json.decode(dashAuthResponse.body) as Map<String, dynamic>;
+    if (confirmedAccountID == null) {
+      final dashAuthResponse = await client.post(
+        Uri.parse("$baseDashAuthUrl/verify"),
+        headers: {"Content-Type": "application/json"},
+        body: jsonEncode({"token": dashAuthToken}),
+      );
 
-    if (body["success"] != true || body["data"]["token"] != dashAuthToken) {
-      return null;
+      if (dashAuthResponse.statusCode != 200) {
+        return null;
+      }
+
+      final body = json.decode(dashAuthResponse.body) as Map<String, dynamic>;
+
+      if (body["success"] != true || body["data"]["token"] != dashAuthToken) {
+        return null;
+      }
+
+      confirmedAccountID = body["data"]["id"] as int;
+      confirmedAccountUsername = body["data"]["username"] as String;
+      final tokenExpiration =
+          DateTime.parse(body["data"]["token_expiration"] as String);
+
+      cachedTokens[dashAuthToken] = CachedAuthTokenData(
+        tokenExpiration: tokenExpiration,
+        accountID: confirmedAccountID,
+        cachedAccountUsername: confirmedAccountUsername,
+      );
     }
 
-    final accountID = body["data"]["id"] as int;
-    final username = body["data"]["username"] as String;
+    if (confirmedAccountID == null || confirmedAccountUsername == null) {
+      return null;
+    }
 
     final existingUser = await (db.select(db.users)
-          ..where((tbl) => tbl.accountID.equals(accountID))
+          ..where((tbl) => tbl.accountID.equals(confirmedAccountID!))
           ..limit(1))
         .get()
         .then((l) => l.firstOrNull);
 
     if (existingUser == null) {
       final insertUserQuery = await db.into(db.users).insert(UsersCompanion(
-            accountID: Value(accountID),
-            cachedUsername: Value(username),
+            accountID: Value(confirmedAccountID),
+            cachedUsername: Value(confirmedAccountUsername),
             badPoints: Value(0),
             lastCacheUpdateAt: Value(DateTime.now()),
             badPointsLog: Value(""),
@@ -298,14 +349,15 @@ class ShowcaseServer {
       }
 
       final editUserQuery = await (db.update(db.users)
-            ..where((tbl) => tbl.accountID.equals(accountID)))
-          .write(UsersCompanion.custom(cachedUsername: Variable(username)));
+            ..where((tbl) => tbl.accountID.equals(confirmedAccountID!)))
+          .write(UsersCompanion.custom(
+              cachedUsername: Variable(confirmedAccountUsername)));
       if (editUserQuery != 1) {
         return null;
       }
     }
 
-    return accountID;
+    return confirmedAccountID;
   }
 
   Future<Submission?> getSubmissionForLevel(int levelID) async {

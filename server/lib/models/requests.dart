@@ -2,6 +2,7 @@ import 'dart:typed_data';
 
 import 'package:convert/convert.dart';
 import 'package:json/json.dart';
+import 'package:server/models/database.dart';
 
 @JsonCodable()
 class RequestSubmissionMetadata {
@@ -11,6 +12,16 @@ class RequestSubmissionMetadata {
   final String gdVersion;
 
   Uint8List get replayHashBytes => Uint8List.fromList(hex.decode(replayHash));
+
+  static RequestSubmissionMetadata fromDBSubmission(Submission submission) {
+    // TODO: JsonCodable doesn't create a regular constructor :(
+    return RequestSubmissionMetadata.fromJson({
+      "levelID": submission.levelID,
+      "replayHash": submission.replayHash,
+      "modVersion": submission.modVersion,
+      "gdVersion": submission.gdVersion,
+    });
+  }
 }
 
 @JsonCodable()

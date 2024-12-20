@@ -2,7 +2,6 @@ import 'dart:async';
 import 'package:path/path.dart' as path;
 import 'dart:convert';
 import 'dart:io';
-import 'package:io/io.dart';
 import 'dart:typed_data';
 
 import 'package:server/utils/future_timeout.dart';
@@ -13,6 +12,7 @@ enum ReplayFeedback {
   replayFailed,
   unknown,
   timedOut,
+  notNeeded,
 }
 
 class ShowcasePlayer {
@@ -33,8 +33,6 @@ class ShowcasePlayer {
   });
 
   File get _gdExecutableFile => File(path.join(gdDir.path, "GeometryDash.exe"));
-  Directory get _winePrefixUserDir =>
-      Directory(path.join(winePrefixDir.path, "drive_c/users/showcase"));
   Directory get _winePrefixStartDir =>
       Directory(path.join(winePrefixDir.parent.path, "wine_prefix_start"));
 
@@ -123,7 +121,10 @@ class ShowcasePlayer {
     if (_gdProcess != null) {
       _gdProcess!.kill(ProcessSignal.sigkill);
       _gdProcess = null;
+
       await _closeSocket();
+
+      await Process.run('pkill', ['-9', 'wine']);
     }
   }
 
@@ -148,7 +149,7 @@ class ShowcasePlayer {
       if (sent) {
         final pong = await _waitForCommand(
           "client_pong",
-          Duration(milliseconds: 500),
+          Duration(milliseconds: 1500),
         );
         if (pong == 0) {
           return true;
@@ -165,7 +166,8 @@ class ShowcasePlayer {
     await winePrefixDir.parent.create(recursive: true);
 
     // await copyPath(_winePrefixStartDir.path, winePrefixDir.path);
-    final copyResult = await Process.run('cp', ['-R', _winePrefixStartDir.path, winePrefixDir.path]);
+    final copyResult = await Process.run(
+        'cp', ['-R', _winePrefixStartDir.path, winePrefixDir.path]);
     if (copyResult.exitCode != 0) {
       throw Exception(
           "Failed to copy. Error: ${copyResult.stderr.toString().trim()}");
@@ -175,7 +177,9 @@ class ShowcasePlayer {
     _gdProcess = await Process.start(
       'cage',
       [
-        'wine64', '--', '${_gdExecutableFile.path}',
+        'wine64',
+        '--',
+        _gdExecutableFile.path,
       ],
       workingDirectory: gdDir.path,
       environment: {
@@ -277,7 +281,7 @@ class ShowcasePlayer {
 
     if (!(levelValidInfo["found"] as bool) ||
         !(levelValidInfo["valid"] as bool)) {
-      await _forceStopGD();
+      // await _forceStopGD();
       // TODO: For now if a level is not found then dont blame user
       // return ReplayFeedback.userBadInput;
       return ReplayFeedback.replayFailed;
