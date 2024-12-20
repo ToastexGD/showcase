@@ -31,5 +31,13 @@
           '';
         };
       };
-    });
+    })
+    // {
+      overlays.default = _final: prev: {
+        showcase-server = prev.callPackage ./server/nix/package.nix {};
+      };
+      nixosModules = {
+        default = import ./server/nix/module.nix self;
+      };
+    };
 }
