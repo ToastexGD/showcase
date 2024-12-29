@@ -8,32 +8,11 @@
 #include "showcase_manager.hpp"
 #include <matjson.hpp>
 
-
-void ShowcaseAutoManager::setAutoSettings(float dt) {
-  if (m_autoEnabled) {
-    // Mute audio
-    FMODAudioEngine::get()->setEffectsVolume(0.f);
-    FMODAudioEngine::get()->setBackgroundMusicVolume(0.f);
-    // Disable VSync
-    if (CCApplication::sharedApplication()->getVerticalSyncEnabled()) {
-      CCApplication::sharedApplication()->toggleVerticalSync(false);
-    }
-    // if (ShowcaseBotManager::get()->m_state == ShowcaseBotState::Playing && PlayLayer::get()) {
-    //   // Run at 2 fps
-    //   CCDirector::sharedDirector()->setAnimationInterval(1.f / 2.f);
-    // } else {
-    //   // Run at 30 fps
-    //   CCDirector::sharedDirector()->setAnimationInterval(1.f / 30.f);
-    // }
-    // Set texture to LOW (only applies after launch and doesn't save between restarts)
-    // CCDirector::sharedDirector()->updateContentScale(TextureQuality::kTextureQualityLow);
-  }
-}
-
 bool ShowcaseAutoManager::init() {
   if (!CCNode::init())
     return false;
 
+#ifdef WITH_SOCKET
   this->getScheduler()->scheduleSelector(schedule_selector(ShowcaseAutoManager::setAutoSettings), this, 1.f, kCCRepeatForever, 0, false);
 
   if (createSocket()) {
@@ -71,8 +50,32 @@ bool ShowcaseAutoManager::init() {
 
     sendCommand("client_connected", matjson::Value(0));
   }
+#endif
 
   return true;
+}
+
+#ifdef WITH_SOCKET
+
+void ShowcaseAutoManager::setAutoSettings(float dt) {
+  if (m_autoEnabled) {
+    // Mute audio
+    FMODAudioEngine::get()->setEffectsVolume(0.f);
+    FMODAudioEngine::get()->setBackgroundMusicVolume(0.f);
+    // Disable VSync
+    if (CCApplication::sharedApplication()->getVerticalSyncEnabled()) {
+      CCApplication::sharedApplication()->toggleVerticalSync(false);
+    }
+    // if (ShowcaseBotManager::get()->m_state == ShowcaseBotState::Playing && PlayLayer::get()) {
+    //   // Run at 2 fps
+    //   CCDirector::sharedDirector()->setAnimationInterval(1.f / 2.f);
+    // } else {
+    //   // Run at 30 fps
+    //   CCDirector::sharedDirector()->setAnimationInterval(1.f / 30.f);
+    // }
+    // Set texture to LOW (only applies after launch and doesn't save between restarts)
+    // CCDirector::sharedDirector()->updateContentScale(TextureQuality::kTextureQualityLow);
+  }
 }
 
 bool ShowcaseAutoManager::sendCommand(const std::string &commandName, const matjson::Value &arg) {
@@ -132,38 +135,6 @@ void ShowcaseAutoManager::onCommand(const std::string &commandName, matjson::Val
   }
 }
 
-bool ShowcaseAutoManager::onLevelComplete(PlayLayer *playLayer) {
-  log::info("Level complete!");
-  if (!m_clientSocket.has_value())
-    return false;
-
-  sendCommand("client_replay_result", matjson::makeObject({
-                                          {"levelID", playLayer->m_level->m_levelID.value()},
-                                          {"finished", true},
-                                      }));
-  playLayer->onQuit();
-
-  return false;
-}
-
-void ShowcaseAutoManager::onLevelRestart(PlayLayer *playLayer) {
-  log::info("Level restart {}", m_levelRestarts);
-
-  m_levelRestarts += 1;
-  if (m_levelRestarts < 2) {
-    return;
-  }
-
-  if (!m_clientSocket.has_value())
-    return;
-
-  sendCommand("client_replay_result", matjson::makeObject({
-                                          {"levelID", playLayer->m_level->m_levelID.value()},
-                                          {"finished", false},
-                                      }));
-  playLayer->onQuit();
-}
-
 bool ShowcaseAutoManager::createSocket() {
   SOCKET clientSocket = socket(AF_INET, SOCK_STREAM, 0);
 
@@ -179,4 +150,42 @@ bool ShowcaseAutoManager::createSocket() {
   m_clientSocket = clientSocket;
 
   return true;
+}
+
+#endif
+
+bool ShowcaseAutoManager::onLevelComplete(PlayLayer *playLayer) {
+#ifdef WITH_SOCKET
+  log::info("Level complete!");
+  if (!m_clientSocket.has_value())
+    return false;
+
+  sendCommand("client_replay_result", matjson::makeObject({
+                                          {"levelID", playLayer->m_level->m_levelID.value()},
+                                          {"finished", true},
+                                      }));
+  playLayer->onQuit();
+
+#endif
+  return false;
+}
+
+void ShowcaseAutoManager::onLevelRestart(PlayLayer *playLayer) {
+#ifdef WITH_SOCKET
+  log::info("Level restart {}", m_levelRestarts);
+
+  m_levelRestarts += 1;
+  if (m_levelRestarts < 2) {
+    return;
+  }
+
+  if (!m_clientSocket.has_value())
+    return;
+
+  sendCommand("client_replay_result", matjson::makeObject({
+                                          {"levelID", playLayer->m_level->m_levelID.value()},
+                                          {"finished", false},
+                                      }));
+  playLayer->onQuit();
+#endif
 }

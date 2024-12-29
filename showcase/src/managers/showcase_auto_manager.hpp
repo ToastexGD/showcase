@@ -6,18 +6,22 @@
 class ShowcaseAutoManager : public CCNode {
 protected:
   inline static ShowcaseAutoManager *m_instance = nullptr;
+#ifdef WITH_SOCKET
   std::optional<SOCKET> m_clientSocket = std::nullopt;
   std::thread m_thread;
 
   int m_levelRestarts = 0;
+#endif
 
   bool init() override;
+#ifdef WITH_SOCKET
   bool createSocket();
 
   bool sendCommand(const std::string& commandName, const matjson::Value& arg);
   void onCommand(const std::string& commandName, matjson::Value arg);
 
   void setAutoSettings(float dt);
+#endif
 public:
   bool m_autoEnabled = false;
 

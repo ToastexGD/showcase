@@ -10,6 +10,8 @@ file(GLOB_RECURSE SOURCES
     src/*.cpp
 )
 
+# add_compile_definitions(WITH_SOCKET)
+
 add_library(${PROJECT_NAME} SHARED ${SOURCES})
 
 if (NOT DEFINED ENV{GEODE_SDK})
