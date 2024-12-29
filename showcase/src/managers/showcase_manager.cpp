@@ -269,7 +269,7 @@ bool ShowcaseBotManager::onLevelComplete(PlayLayer *playLayer) {
 bool ShowcaseBotManager::shouldLevelBeReplay(GJGameLevel *level) {
   int levelID = level->m_levelID.value();
   bool isRated = level->m_stars.value() >= 2;
-  bool isClassic = true; // TODO
+  bool isClassic = !level->isPlatformer();
   return isRated && isClassic;
 }
 

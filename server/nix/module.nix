@@ -78,14 +78,19 @@ in {
         User = cfg.user;
         # the command to execute when the service starts up
         ExecStart = pkgs.writeShellScript "showcase-server-exec-start" ''
-          ${showcase-server}/bin/showcase-server --data-dir ${cfg.dataDir} --gd-dir ${cfg.gdDir}
+          ${showcase-server}/bin/showcase_server --data-dir ${cfg.dataDir} --gd-dir ${cfg.gdDir}
         '';
 
         Environment = [
+          "XDG_RUNTIME_DIR=/run/user/${toString cfg.userUID}"
           "PATH=${lib.makeBinPath (with pkgs; [
             coreutils
             bashInteractive
             systemd
+            wineWowPackages.unstable
+            cage
+            procps
+            lsof
           ])}"
         ];
       };

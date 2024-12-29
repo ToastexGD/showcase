@@ -1,7 +1,8 @@
 {
-  "geode": "4.0.1",
+  "geode": "4.1.1",
   "gd": {
-    "win": "2.2074"
+    "win": "2.2074",
+    "android": "2.2074"
   },
   "id": "flafy.showcase",
   "name": "showcase",

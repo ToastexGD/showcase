@@ -50,5 +50,16 @@ class ShowcaseDatabase extends _$ShowcaseDatabase {
       : super(NativeDatabase.createInBackground(sqliteFile));
 
   @override
-  int get schemaVersion => 1;
+  int get schemaVersion => 2;
+
+  @override
+  MigrationStrategy get migration => MigrationStrategy(
+        onUpgrade: (migrator, from, to) async {
+          if (from < 2) {
+            await migrator.addColumn(submissions, submissions.levelVersion);
+            await migrator.addColumn(levels, levels.cachedVersion);
+            await migrator.addColumn(levels, levels.accesses);
+          }
+        },
+      );
 }

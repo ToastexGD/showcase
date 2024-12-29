@@ -79,9 +79,13 @@ class ShowcaseServer {
         return Response.unauthorized(null);
       }
 
+      // Make sure not too many submissions are submitted at once (on server side, TODO on client side as well).
+      // That means you can have `maxUserSubmissions - 1` queued and still add `maxUserSubmissions` more.. But that's fine...
+      final cutSubmissions = body.submissions.take(maxUserSubmissions).toList();
+
       // verify all the submissions are needed
       // if one isn't then return and add 1 BAD POINT to gd user
-      for (final submission in body.submissions) {
+      for (final submission in cutSubmissions) {
         if (!await isSubmissionNeeded(submission.metadata, accountID)) {
           await addBadPoint(
             accountID,
@@ -91,7 +95,7 @@ class ShowcaseServer {
         }
       }
 
-      for (final submission in body.submissions) {
+      for (final submission in cutSubmissions) {
         Uint8List replayData = base64.decode(submission.dataBase64);
 
         if (replayData.length > maxReplayDataSize) {
@@ -247,12 +251,14 @@ class ShowcaseServer {
     final replayHashBytes = metadata.replayHashBytes;
 
     // not needed if hash already checked
-    final sameHashSubmission = await (db.select(db.submissions)
-          ..where((tbl) => tbl.replayHash.equals(replayHashBytes))
-          ..limit(1))
-        .get();
-    if (sameHashSubmission.isNotEmpty) {
-      return false;
+    if (!alreadyAdded) {
+      final sameHashSubmission = await (db.select(db.submissions)
+            ..where((tbl) => tbl.replayHash.equals(replayHashBytes))
+            ..limit(1))
+          .get();
+      if (sameHashSubmission.isNotEmpty) {
+        return false;
+      }
     }
 
     // not needed if the level isn't needed

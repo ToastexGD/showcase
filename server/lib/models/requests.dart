@@ -17,7 +17,7 @@ class RequestSubmissionMetadata {
     // TODO: JsonCodable doesn't create a regular constructor :(
     return RequestSubmissionMetadata.fromJson({
       "levelID": submission.levelID,
-      "replayHash": submission.replayHash,
+      "replayHash": hex.encode(submission.replayHash),
       "modVersion": submission.modVersion,
       "gdVersion": submission.gdVersion,
     });

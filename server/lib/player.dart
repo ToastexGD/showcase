@@ -44,7 +44,12 @@ class ShowcasePlayer {
   }
 
   Future<bool> _establishSocket() async {
-    final serverSocket = await ServerSocket.bind("127.0.0.1", 8081);
+    await _closeSocket();
+    print("Player: Creating server socket...");
+    // Shared = true in case last serverSocket wasn't closed for whatever reason
+    final serverSocket =
+        await ServerSocket.bind("127.0.0.1", 8081, shared: true);
+    print("Player: Waiting for client socket...");
     final clientSocket = await futureTimeout(
       serverSocket.first,
       Duration(seconds: 10),
@@ -89,6 +94,7 @@ class ShowcasePlayer {
 
   Future<Object?> _waitForCommand(String commandName,
       [Duration timeout = const Duration(seconds: 10)]) async {
+    print("Player: Waiting on \"$commandName\".");
     if (_clientSocket == null) return null;
     return futureTimeout<Object?>(
       Future<Object?>(() async {
@@ -119,13 +125,16 @@ class ShowcasePlayer {
   Future<void> _forceStopGD() async {
     print("Player: Force stopping GD... $_gdProcess");
     if (_gdProcess != null) {
+      _gdProcess!.kill(ProcessSignal.sigterm);
+      await Future.delayed(Duration(seconds: 1));
       _gdProcess!.kill(ProcessSignal.sigkill);
       _gdProcess = null;
-
-      await _closeSocket();
-
-      await Process.run('pkill', ['-9', 'wine']);
     }
+
+    await _closeSocket();
+
+    await Process.run('pkill', ['-15', 'wine']).timeout(Duration(seconds: 2));
+    await Process.run('pkill', ['-9', 'wine']);
   }
 
   Future<void> _closeSocket() async {
@@ -136,6 +145,8 @@ class ShowcasePlayer {
     _clientSocket = null;
     _clientStreamIterator = null;
     _serverSocket = null;
+    // Let's not close ourselves...
+    // await Process.run('bash', ['-c', 'kill -9 \$(lsof -t -i:8081)']);
   }
 
   Future<bool> _runGD({bool tryUseExisting = true}) async {
@@ -195,20 +206,21 @@ class ShowcasePlayer {
     );
 
     _gdProcess!.stderr.listen((event) {
-      // print(String.fromCharCodes(event));
+      print(String.fromCharCodes(event));
     });
     _gdProcess!.stdout.listen((event) {
-      // print(String.fromCharCodes(event));
-      final stdoutLines = String.fromCharCodes(event).split("\n");
-      for (final line in stdoutLines) {
-        if (line.contains("[showcase]")) {
-          print(line);
-        }
-      }
+      print(String.fromCharCodes(event));
+      // final stdoutLines = String.fromCharCodes(event).split("\n");
+      // for (final line in stdoutLines) {
+      //   if (line.contains("[showcase]")) {
+      //     print(line);
+      //   }
+      // }
     });
 
     print("Player: Waiting on socket...");
     if (!await _establishSocket()) {
+      print("Failed to establish socket.");
       await _forceStopGD();
       return false;
     }
@@ -234,9 +246,7 @@ class ShowcasePlayer {
       );
       print("Player: Done single internal feedback: $feedback");
       print("Player: Attempts left: ${maxAttempts - 1}");
-      if (feedback == null) {
-        feedback = ReplayFeedback.timedOut;
-      }
+      feedback ??= ReplayFeedback.timedOut;
 
       if (feedback == ReplayFeedback.unknown) {
         return playReplay(
@@ -258,6 +268,13 @@ class ShowcasePlayer {
     required int levelID,
     required Uint8List replayData,
   }) async {
+    if (levelID < 4000) {
+      // TODO: For now if a level is bad id then dont blame user
+      // Also, remove this later.
+      // return ReplayFeedback.userBadInput;
+      return ReplayFeedback.replayFailed;
+    }
+
     // Run GD and make sure it's ready
     if (!await _runGD()) {
       await _forceStopGD();

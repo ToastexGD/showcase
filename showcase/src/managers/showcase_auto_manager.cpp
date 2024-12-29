@@ -26,7 +26,7 @@ void ShowcaseAutoManager::setAutoSettings(float dt) {
     //   CCDirector::sharedDirector()->setAnimationInterval(1.f / 30.f);
     // }
     // Set texture to LOW (only applies after launch and doesn't save between restarts)
-    CCDirector::sharedDirector()->updateContentScale(TextureQuality::kTextureQualityLow);
+    // CCDirector::sharedDirector()->updateContentScale(TextureQuality::kTextureQualityLow);
   }
 }
 
