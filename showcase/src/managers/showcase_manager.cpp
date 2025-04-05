@@ -14,7 +14,6 @@
 #include "Geode/utils/web.hpp"
 #include "base64.hpp"
 #include "dashauth.hpp"
-#include <WinBase.h>
 #include <filesystem>
 #include <gdr/gdr.hpp>
 #include <matjson.hpp>
