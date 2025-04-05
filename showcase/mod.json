@@ -18,6 +18,6 @@
     }
   ],
   "resources": {
-    "sprites": ["resources/clapper.png"]
+    "sprites": ["resources/clapper.png", "resources/auto-button-example.png"]
   }
 }
