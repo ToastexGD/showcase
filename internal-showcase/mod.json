@@ -4,20 +4,16 @@
     "win": "2.2074",
     "android": "2.2074"
   },
-  "id": "flafy.showcase",
-  "name": "showcase",
+  "id": "flafy.showcase-internal",
+  "name": "showcase-internal",
   "version": "v1.0.0-alpha.2",
   "developer": "Flafy",
-  "description": "Upload and play gameplay of rated levels",
-  "tags": ["online", "modtober24"],
+  "description": "Internal showcase",
   "dependencies": [
     {
       "id": "geode.node-ids",
       "version": ">=v1.18.0",
       "importance": "required"
     }
-  ],
-  "resources": {
-    "sprites": ["resources/clapper.png"]
-  }
+  ]
 }

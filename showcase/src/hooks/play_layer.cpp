@@ -14,8 +14,8 @@ struct SBPlayLayer : geode::Modify<SBPlayLayer, PlayLayer> {
     ShowcaseBotManager::get()->onLevelRestart(this);
   }
 
-  void onExit() {
+  void onQuit() {
     ShowcaseBotManager::get()->onLevelExit(this);
-    PlayLayer::onExit();
+    PlayLayer::onQuit();
   }
 };

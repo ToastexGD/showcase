@@ -22,17 +22,8 @@ endif()
 
 add_subdirectory($ENV{GEODE_SDK} ${CMAKE_CURRENT_BINARY_DIR}/geode)
 
-CPMAddPackage("gh:FireMario211/dashauth#main")
-target_link_libraries(${PROJECT_NAME} DashAuth)
-
 CPMAddPackage("gh:maxnut/GDReplayFormat#638e72cf0e30f148d12b483f258626f5ee31f431")
 target_link_libraries(${PROJECT_NAME} libGDR)
-
-CPMAddPackage("gh:System-Glitch/SHA256#1de731e3762ccb9d50ddd3c8f86ccd36fdb51aad")
-target_link_libraries(${PROJECT_NAME} sha256)
-
-CPMAddPackage("gh:tobiaslocker/base64#387b32f337b83d358ac1ffe574e596ba99c41d31")
-target_include_directories(${PROJECT_NAME} PRIVATE ${base64_SOURCE_DIR}/include)
 
 # Set up dependencies, resources, and link Geode.
 setup_geode_mod(${PROJECT_NAME})

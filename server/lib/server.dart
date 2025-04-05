@@ -1,3 +1,4 @@
+// TODO: also allow from a specific number of likes. not just rated!
 import 'dart:convert';
 import 'package:collection/collection.dart';
 import 'package:path/path.dart' as path;
@@ -9,50 +10,77 @@ import 'package:drift/drift.dart';
 import 'package:server/models/auth.dart';
 import 'package:server/models/requests.dart';
 import 'package:server/models/database.dart';
-import 'package:server/player.dart';
 import 'package:shelf_router/shelf_router.dart';
 import 'package:shelf/shelf.dart';
 import 'package:shelf/shelf_io.dart' as io;
 
 const gdVersion = "2.2074";
-const modVersion = "1.0.0-alpha.1";
+const modVersion = "1.0.0-alpha.2";
 const maxReplayDataSize = 5 * 1024 * 1024; // 5MB
 const maxBadPoints = 5;
 const baseDashAuthUrl = "https://dashend.firee.dev/api/v1";
 // const baseDashAuthUrl = "http://localhost:3002/api/v1";
 const maxUserSubmissions = 10;
 
+enum SubmissionEvaluation {
+  needed,
+  notNeeded,
+  ignore,
+}
+
+enum ReplayFeedback {
+  success,
+  userBadInput,
+  replayFailed,
+  timedOut,
+  unknown,
+  notNeeded,
+}
+
 class ShowcaseServer {
   late final HttpServer server;
   late final ShowcaseDatabase db;
-  late final ShowcasePlayer player;
-  final Directory dataDir;
-  final bool headless;
   final Map<String, CachedAuthTokenData> cachedTokens;
+  final Directory gdDir;
+  final String pgHostname;
+  final int pgPort;
+  final String pgUsername;
+  final String pgPassword;
+  final String pgDatabaseName;
+  final File playerBinaryFile;
+  final int httpPort;
 
-  Directory get winePrefixDir =>
-      Directory(path.join(dataDir.path, "wine_prefix"));
-  File get sqliteFile => File(path.join(dataDir.path, "db", "db.sqlite"));
+  File get gdLevelDataFile => File(path.join(gdDir.path, "level.dat"));
+  File get gdResponseFile => File(path.join(gdDir.path, "response.json"));
+  File get gdReplayFile => File(path.join(gdDir.path, "replay.gdr2"));
 
   ShowcaseServer({
-    required Directory gdDir,
-    required this.dataDir,
-    required this.headless,
+    required this.gdDir,
+    required this.pgHostname,
+    required this.pgPort,
+    required this.pgUsername,
+    required this.pgPassword,
+    required this.pgDatabaseName,
+    required this.playerBinaryFile,
+    required this.httpPort,
   }) : cachedTokens = {} {
-    winePrefixDir.create(recursive: true);
-    sqliteFile.parent.create(recursive: true);
-
-    db = ShowcaseDatabase(sqliteFile: sqliteFile);
-    player = ShowcasePlayer(
-      gdDir: gdDir,
-      winePrefixDir: winePrefixDir,
-      headless: headless,
+    db = ShowcaseDatabase(
+      host: pgHostname,
+      port: pgPort,
+      databaseName: pgDatabaseName,
+      username: pgUsername,
+      password: pgPassword,
     );
 
     final app = Router();
 
     app.post('/needed_submissions', (Request request) async {
       final jsonData = json.decode(await request.readAsString());
+      if (jsonData is! Map<String, Object?>) {
+        return Response.badRequest(
+          body: "Invalid JSON format. Expected a Map.",
+        );
+      }
 
       final body = NeededSubmissionsRequest.fromJson(jsonData);
 
@@ -61,17 +89,30 @@ class ShowcaseServer {
         return Response.unauthorized(null);
       }
 
-      List<bool> wantReplay = [];
+      List<int> notNeededIndexes = [];
+      int? neededIndex;
 
-      for (final metadata in body.submissionsMetadata) {
-        wantReplay.add(await isSubmissionNeeded(metadata, accountID));
+      for (final (index, submission) in body.submissions.indexed) {
+        switch (await evaluateSubmission(submission, accountID)) {
+          case SubmissionEvaluation.ignore:
+            break;
+          case SubmissionEvaluation.notNeeded:
+            notNeededIndexes.add(index);
+            break;
+          case SubmissionEvaluation.needed:
+            neededIndex = index;
+            break;
+        }
       }
 
-      return Response.ok(json.encode(wantReplay));
+      return Response.ok(json.encode({
+        "notNeeded": notNeededIndexes,
+        "submit": neededIndex,
+      }));
     });
 
-    app.post('/upload_submissions', (Request request) async {
-      final body = UploadSubmissionsRequest.fromJson(
+    app.post('/upload_submission', (Request request) async {
+      final body = UploadSubmissionRequest.fromJson(
           json.decode(await request.readAsString()));
 
       final accountID = await authenticateUser(body.dashAuthToken);
@@ -79,53 +120,46 @@ class ShowcaseServer {
         return Response.unauthorized(null);
       }
 
-      // Make sure not too many submissions are submitted at once (on server side, TODO on client side as well).
-      // That means you can have `maxUserSubmissions - 1` queued and still add `maxUserSubmissions` more.. But that's fine...
-      final cutSubmissions = body.submissions.take(maxUserSubmissions).toList();
-
-      // verify all the submissions are needed
-      // if one isn't then return and add 1 BAD POINT to gd user
-      for (final submission in cutSubmissions) {
-        if (!await isSubmissionNeeded(submission.metadata, accountID)) {
-          await addBadPoint(
-            accountID,
-            "Tried submitting a submission that isn't needed",
-          );
-          return Response.forbidden('Submission not needed');
-        }
+      if (await evaluateSubmission(body.submission, accountID) !=
+          SubmissionEvaluation.needed) {
+        await addBadPoint(
+            accountID, "User tried adding a submission that isn't needed.");
+        return Response.forbidden("Submission not needed");
       }
 
-      for (final submission in cutSubmissions) {
-        Uint8List replayData = base64.decode(submission.dataBase64);
+      if (body.submission.dataBase64 == null) {
+        await addBadPoint(accountID, "No replay data given");
+        return Response.forbidden('No replay data given');
+      }
 
-        if (replayData.length > maxReplayDataSize) {
-          await addBadPoint(accountID, "Given Replay data was too large");
-          return Response.forbidden('Replay data too large');
-        }
+      Uint8List replayData = base64.decode(body.submission.dataBase64!);
 
-        Uint8List recomputedReplayHash =
-            Uint8List.fromList(sha256.convert(replayData).bytes);
-        Function eq = const ListEquality().equals;
-        if (!eq(recomputedReplayHash, submission.metadata.replayHashBytes)) {
-          await addBadPoint(accountID,
-              "Given Replay hash doesn't match the computed replay hash");
-          return Response.forbidden('Replay hash mismatch');
-        }
+      if (replayData.length > maxReplayDataSize) {
+        await addBadPoint(accountID, "Given Replay data was too large");
+        return Response.forbidden('Replay data too large');
+      }
 
-        print(
-            "Added submission for level ${submission.metadata.levelID} by $accountID");
-        db.into(db.submissions).insert(SubmissionsCompanion(
-              levelID: Value(submission.metadata.levelID),
+      Uint8List recomputedReplayHash =
+          Uint8List.fromList(sha256.convert(replayData).bytes);
+
+      await addLevelToDB(levelID: body.submission.levelID);
+
+      await db.into(db.submissions).insert(
+            SubmissionsCompanion(
+              levelID: Value(body.submission.levelID),
+              levelVersion: Value(body.submission.levelVersion),
               status: Value(SubmissionStatus.pendingReview),
               replayHash: Value(recomputedReplayHash),
               replayData: Value(replayData),
               modVersion: Value(modVersion),
               gdVersion: Value(gdVersion),
               gdAccountID: Value(accountID),
-              rejectionReason: Value(null),
+              rejectionReason: Value(""),
               submittedAt: Value(DateTime.now()),
-            ));
-      }
+            ),
+          );
+      print(
+          "Added submission for level ${body.submission.levelID} by $accountID");
       return Response.ok(null);
     });
 
@@ -138,7 +172,7 @@ class ShowcaseServer {
       print("Getting replay for level: ${body.levelID}");
       final submission = await getSubmissionForLevel(body.levelID);
       if (submission == null) {
-        return Response.notFound("No replay found for level");
+        return Response.notFound("No replay found for level ${body.levelID}");
       }
       print("Got valid replay");
       return Response.ok(base64.encode(submission.replayData!));
@@ -146,14 +180,16 @@ class ShowcaseServer {
 
     playLevelsLoop();
 
-    io.serve(app.call, '127.0.0.1', 8080).then((server) {
+    io.serve(app.call, '0.0.0.0', httpPort).then((server) {
       this.server = server;
       print('Serving public at http://${server.address.host}:${server.port}');
     });
   }
 
   Future<void> playLevelsLoop() async {
+    Process? process;
     while (true) {
+      process?.kill(ProcessSignal.sigterm);
       await Future.delayed(Duration(seconds: 2));
       try {
         final submission = await nextSubmissionInQueue();
@@ -167,18 +203,204 @@ class ShowcaseServer {
 
         ReplayFeedback feedback = ReplayFeedback.unknown;
 
-        if (!await isSubmissionNeeded(
-          RequestSubmissionMetadata.fromDBSubmission(submission),
-          submission.gdAccountID,
-          alreadyAdded: true,
-        )) {
-          feedback = ReplayFeedback.notNeeded;
-        } else {
-          feedback = await player.playReplay(
-            levelID: submission.levelID,
-            replayData: submission.replayData!,
-            maxAttempts: 2,
-          );
+        try {
+          switch (await evaluateSubmission(
+            RequestSubmissionInfo.fromDBSubmission(submission),
+            submission.gdAccountID,
+            alreadyAdded: true,
+          )) {
+            case SubmissionEvaluation.ignore:
+              throw Exception(
+                  "Submission should never be ignored if already added.");
+            case SubmissionEvaluation.notNeeded:
+              feedback = ReplayFeedback.notNeeded;
+              break;
+            case SubmissionEvaluation.needed:
+              if (submission.levelID <= 4000) {
+                feedback = ReplayFeedback.userBadInput;
+                break;
+              }
+
+              final res = await http.post(
+                Uri.parse(
+                    "http://www.boomlings.com/database/getGJLevels21.php"),
+                body: "secret=Wmfd2893gb7&type=10&str=${submission.levelID}",
+                headers: {
+                  "Content-Type": "application/x-www-form-urlencoded",
+                  "User-Agent": "",
+                },
+              );
+              if (res.statusCode != 200) {
+                feedback = ReplayFeedback.userBadInput;
+                break;
+              }
+              if (res.body == "-1") {
+                feedback = ReplayFeedback.userBadInput;
+                break;
+              }
+              Map<String, String> infoDict = {};
+              print(res.body);
+
+              List<String> sections = res.body.split("#");
+
+              final levelInfoDict = parseGDDict(sections[0]);
+              final creatorInfoDict = parseGDDict(sections[1]);
+
+              final levelName = levelInfoDict["2"];
+              final levelCreatorID = levelInfoDict["6"];
+              final levelCreator = creatorInfoDict[levelCreatorID];
+              final levelDescription =
+                  utf8.decode(base64.decode(levelInfoDict["3"]!));
+              final levelVersion = int.parse(levelInfoDict["5"]!);
+              final levelStars = int.parse(levelInfoDict["18"]!);
+              final levelLikes = int.parse(levelInfoDict["14"]!);
+              final isClassic = levelInfoDict["15"] != "5";
+
+              LevelDifficulty difficulty = LevelDifficulty.unknown;
+              final isDemon = levelInfoDict["15"] == "1";
+              if (isDemon) {
+                final demonDiff = levelInfoDict["43"];
+                switch (demonDiff) {
+                  case "3":
+                    difficulty = LevelDifficulty.easyDemon;
+                    break;
+                  case "4":
+                    difficulty = LevelDifficulty.mediumDemon;
+                    break;
+                  case "0":
+                    difficulty = LevelDifficulty.hardDemon;
+                    break;
+                  case "5":
+                    difficulty = LevelDifficulty.insaneDemon;
+                    break;
+                  case "6":
+                    difficulty = LevelDifficulty.extremeDemon;
+                    break;
+                  default:
+                    difficulty = LevelDifficulty.unknown;
+                }
+              } else {
+                final nonDemonDiff = levelInfoDict["9"];
+                switch (nonDemonDiff) {
+                  case "10":
+                    difficulty = LevelDifficulty.easy;
+                    break;
+                  case "20":
+                    difficulty = LevelDifficulty.normal;
+                    break;
+                  case "30":
+                    difficulty = LevelDifficulty.hard;
+                    break;
+                  case "40":
+                    difficulty = LevelDifficulty.harder;
+                    break;
+                  case "50":
+                    difficulty = LevelDifficulty.insane;
+                    break;
+                  default:
+                    difficulty = LevelDifficulty.unknown;
+                }
+              }
+
+              await addLevelToDB(
+                levelID: submission.levelID,
+                cachedVersion: levelVersion,
+                cachedTitle: levelName,
+                cachedCreator: levelCreator,
+                cachedDescription: levelDescription,
+                cachedStars: levelStars,
+                cachedDifficulty: difficulty,
+                cachedLikes: levelLikes,
+              );
+
+              if (!isClassic ||
+                  levelStars < 2 ||
+                  submission.levelVersion > levelVersion) {
+                feedback = ReplayFeedback.userBadInput;
+                break;
+              }
+
+              if (levelVersion != submission.levelVersion) {
+                feedback = ReplayFeedback.notNeeded;
+                break;
+              }
+
+              // delete response.json
+              if (await gdResponseFile.exists()) {
+                await gdResponseFile.delete();
+              }
+
+              // force stop the vm
+              process?.kill(ProcessSignal.sigkill);
+
+              // get level data
+              final resLevelData = await http.post(
+                Uri.parse(
+                    "http://www.boomlings.com/database/downloadGJLevel22.php"),
+                body: "secret=Wmfd2893gb7&levelID=${submission.levelID}",
+                headers: {
+                  "Content-Type": "application/x-www-form-urlencoded",
+                  "User-Agent": "",
+                },
+              );
+              if (res.statusCode != 200) {
+                feedback = ReplayFeedback.userBadInput;
+                break;
+              }
+              if (res.body == "-1") {
+                feedback = ReplayFeedback.userBadInput;
+                break;
+              }
+
+              // write in level.dat what level to play
+              await gdLevelDataFile.writeAsString(
+                resLevelData.body.split("#")[0],
+              );
+
+              // write in replay.gdr2 the replay data
+              await gdReplayFile.writeAsBytes(submission.replayData!);
+
+              // run the vm
+              process = await Process.start(playerBinaryFile.path, []);
+              process.stderr.listen((event) {
+                stdout.write(String.fromCharCodes(event));
+              });
+              process.stdout.listen((event) {
+                stdout.write(String.fromCharCodes(event));
+              });
+
+              // wait and read response.json for the result
+              final startTime = DateTime.now();
+              print("Waiting for VM to complete the level...");
+              while (!await gdResponseFile.exists() &&
+                  await _isProcessAlive(process)) {
+                await Future.delayed(Duration(milliseconds: 1000));
+                if (DateTime.now().difference(startTime).inSeconds > 60) {
+                  feedback = ReplayFeedback.timedOut;
+                  break;
+                }
+              }
+              if (feedback == ReplayFeedback.timedOut ||
+                  !await gdResponseFile.exists()) {
+                break;
+              }
+
+              process.kill(ProcessSignal.sigterm);
+
+              final responseJson =
+                  json.decode(await gdResponseFile.readAsString());
+
+              if (responseJson["success"] == true) {
+                feedback = ReplayFeedback.success;
+              } else {
+                feedback = ReplayFeedback.replayFailed;
+              }
+
+              break;
+          }
+        } catch (e, stacktraceVar) {
+          print("Failed due to $e.\n$stacktraceVar");
+          feedback = ReplayFeedback.unknown;
         }
 
         print(
@@ -192,7 +414,8 @@ class ShowcaseServer {
               submission.gdAccountID,
               "Bad point during replay check. Probably replay for an invalid level.",
             );
-            await rejectSubmission(submission.id, "Bad point given.");
+            await rejectSubmission(
+                submission.id, "Bad input. Bad point given.");
             break;
           case ReplayFeedback.replayFailed:
             await rejectSubmission(
@@ -209,8 +432,8 @@ class ShowcaseServer {
             await rejectSubmission(submission.id, "Not needed.");
             break;
         }
-      } catch (e, stacktrace) {
-        print("Play levels loop failed: ${e}\n\nStacktrace: ${stacktrace}");
+      } catch (e, stacktraceVar) {
+        print("Play levels loop failed: $e\n\nStacktrace: $stacktraceVar");
       }
     }
   }
@@ -233,6 +456,7 @@ class ShowcaseServer {
         .write(
       SubmissionsCompanion.custom(
         status: Variable(SubmissionStatus.rejected.index),
+        replayData: Variable(null),
         rejectionReason:
             db.submissions.rejectionReason + Variable(formattedReason),
         reviewedAt: Variable(DateTime.now()),
@@ -240,31 +464,20 @@ class ShowcaseServer {
     );
   }
 
-  Future<bool> isSubmissionNeeded(
-    RequestSubmissionMetadata metadata,
+  Future<SubmissionEvaluation> evaluateSubmission(
+    RequestSubmissionInfo submission,
     int accountID, {
     bool alreadyAdded = false,
   }) async {
-    if (metadata.gdVersion != gdVersion) return false;
-    if (metadata.modVersion != modVersion) return false;
-
-    final replayHashBytes = metadata.replayHashBytes;
-
-    // not needed if hash already checked
-    if (!alreadyAdded) {
-      final sameHashSubmission = await (db.select(db.submissions)
-            ..where((tbl) => tbl.replayHash.equals(replayHashBytes))
-            ..limit(1))
-          .get();
-      if (sameHashSubmission.isNotEmpty) {
-        return false;
-      }
+    if (submission.gdVersion != gdVersion ||
+        submission.modVersion != modVersion) {
+      return SubmissionEvaluation.notNeeded;
     }
 
-    // not needed if the level isn't needed
-    final acceptedSubmission = await getSubmissionForLevel(metadata.levelID);
+    // not needed if a submission already exists for the level
+    final acceptedSubmission = await getSubmissionForLevel(submission.levelID);
     if (acceptedSubmission != null) {
-      return false;
+      return SubmissionEvaluation.notNeeded;
     }
 
     // not needed if user already has 10 pending submissions
@@ -276,11 +489,11 @@ class ShowcaseServer {
             ..limit(maxUserSubmissions))
           .get();
       if (userSubmission.length >= maxUserSubmissions) {
-        return false;
+        return SubmissionEvaluation.ignore;
       }
     }
 
-    return true;
+    return SubmissionEvaluation.needed;
   }
 
   Future<int?> authenticateUser(String dashAuthToken) async {
@@ -339,16 +552,13 @@ class ShowcaseServer {
         .then((l) => l.firstOrNull);
 
     if (existingUser == null) {
-      final insertUserQuery = await db.into(db.users).insert(UsersCompanion(
+      await db.into(db.users).insert(UsersCompanion(
             accountID: Value(confirmedAccountID),
             cachedUsername: Value(confirmedAccountUsername),
             badPoints: Value(0),
             lastCacheUpdateAt: Value(DateTime.now()),
             badPointsLog: Value(""),
           ));
-      if (insertUserQuery != 1) {
-        return null;
-      }
     } else {
       if (existingUser.badPoints > maxBadPoints) {
         return null;
@@ -420,5 +630,105 @@ class ShowcaseServer {
     if (editUserQuery != 1) {
       throw Exception("Failed to add bad point");
     }
+  }
+
+  Future<void> addLevelToDB({
+    required int levelID,
+    int? cachedVersion,
+    String? cachedTitle,
+    String? cachedCreator,
+    String? cachedDescription,
+    int? cachedStars,
+    int? cachedLikes,
+    LevelDifficulty? cachedDifficulty,
+    int addedAccesses = 0,
+  }) async {
+    final existingLevel = await (db.select(db.levels)
+          ..where((tbl) => tbl.levelID.equals(levelID))
+          ..limit(1))
+        .get()
+        .then((l) => l.firstOrNull);
+
+    if (existingLevel != null) {
+      if (cachedVersion == null &&
+          cachedTitle == null &&
+          cachedCreator == null &&
+          cachedDescription == null &&
+          cachedStars == null &&
+          cachedLikes == null &&
+          cachedDifficulty == null &&
+          addedAccesses == 0) {
+        return;
+      }
+
+      // Update existing entry instead of deleting
+      await (db.update(db.levels)..where((tbl) => tbl.levelID.equals(levelID)))
+          .write(
+        LevelsCompanion(
+          cachedVersion:
+              cachedVersion != null ? Value(cachedVersion) : Value.absent(),
+          cachedTitle:
+              cachedTitle != null ? Value(cachedTitle) : Value.absent(),
+          cachedCreator:
+              cachedCreator != null ? Value(cachedCreator) : Value.absent(),
+          cachedDescription: cachedDescription != null
+              ? Value(cachedDescription)
+              : Value.absent(),
+          cachedStars:
+              cachedStars != null ? Value(cachedStars) : Value.absent(),
+          cachedLikes:
+              cachedLikes != null ? Value(cachedLikes) : Value.absent(),
+          cachedDifficulty: cachedDifficulty != null
+              ? Value(cachedDifficulty)
+              : Value.absent(),
+          accesses: Value(existingLevel.accesses + addedAccesses),
+          lastCacheUpdateAt: Value(DateTime.now()),
+        ),
+      );
+    } else {
+      // Insert new entry
+      await db.into(db.levels).insert(
+            LevelsCompanion(
+              levelID: Value(levelID),
+              cachedVersion: Value(cachedVersion),
+              cachedTitle: Value(cachedTitle),
+              cachedCreator: Value(cachedCreator),
+              cachedDescription: Value(cachedDescription),
+              cachedStars: Value(cachedStars),
+              cachedLikes: Value(cachedLikes),
+              cachedDifficulty: Value(cachedDifficulty),
+              accesses: Value(addedAccesses),
+              lastCacheUpdateAt: Value(DateTime.now()),
+            ),
+          );
+    }
+  }
+
+  Map<String, String> parseGDDict(String raw) {
+    final pairs = raw.split(":");
+    final infoDict = <String, String>{};
+    for (int i = 0; i < pairs.length; i += 2) {
+      if (i + 1 < pairs.length) {
+        infoDict[pairs[i]] = pairs[i + 1];
+      }
+    }
+    return infoDict;
+  }
+}
+
+Future<bool> _isProcessAlive(Process process) async {
+  try {
+    // Try to check the exitCode, but don't await its completion
+    final exitCodeFuture = process.exitCode;
+    final result = await Future.any([
+      exitCodeFuture,
+      Future.delayed(Duration(milliseconds: 100), () => null),
+    ]);
+
+    // If result is null, the process hasn't exited yet
+    return result == null;
+  } catch (_) {
+    // If something went wrong, assume it's not alive
+    return false;
   }
 }

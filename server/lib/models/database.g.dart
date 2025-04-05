@@ -20,8 +20,20 @@ class $LevelsTable extends Levels with TableInfo<$LevelsTable, Level> {
       const VerificationMeta('cachedTitle');
   @override
   late final GeneratedColumn<String> cachedTitle = GeneratedColumn<String>(
-      'cached_title', aliasedName, false,
-      type: DriftSqlType.string, requiredDuringInsert: true);
+      'cached_title', aliasedName, true,
+      type: DriftSqlType.string, requiredDuringInsert: false);
+  static const VerificationMeta _cachedCreatorMeta =
+      const VerificationMeta('cachedCreator');
+  @override
+  late final GeneratedColumn<String> cachedCreator = GeneratedColumn<String>(
+      'cached_creator', aliasedName, true,
+      type: DriftSqlType.string, requiredDuringInsert: false);
+  static const VerificationMeta _cachedDescriptionMeta =
+      const VerificationMeta('cachedDescription');
+  @override
+  late final GeneratedColumn<String> cachedDescription =
+      GeneratedColumn<String>('cached_description', aliasedName, true,
+          type: DriftSqlType.string, requiredDuringInsert: false);
   static const VerificationMeta _cachedVersionMeta =
       const VerificationMeta('cachedVersion');
   @override
@@ -33,6 +45,19 @@ class $LevelsTable extends Levels with TableInfo<$LevelsTable, Level> {
   @override
   late final GeneratedColumn<int> cachedStars = GeneratedColumn<int>(
       'cached_stars', aliasedName, true,
+      type: DriftSqlType.int, requiredDuringInsert: false);
+  @override
+  late final GeneratedColumnWithTypeConverter<LevelDifficulty?, int>
+      cachedDifficulty = GeneratedColumn<int>(
+              'cached_difficulty', aliasedName, true,
+              type: DriftSqlType.int, requiredDuringInsert: false)
+          .withConverter<LevelDifficulty?>(
+              $LevelsTable.$convertercachedDifficultyn);
+  static const VerificationMeta _cachedLikesMeta =
+      const VerificationMeta('cachedLikes');
+  @override
+  late final GeneratedColumn<int> cachedLikes = GeneratedColumn<int>(
+      'cached_likes', aliasedName, true,
       type: DriftSqlType.int, requiredDuringInsert: false);
   static const VerificationMeta _lastCacheUpdateAtMeta =
       const VerificationMeta('lastCacheUpdateAt');
@@ -52,8 +77,12 @@ class $LevelsTable extends Levels with TableInfo<$LevelsTable, Level> {
   List<GeneratedColumn> get $columns => [
         levelID,
         cachedTitle,
+        cachedCreator,
+        cachedDescription,
         cachedVersion,
         cachedStars,
+        cachedDifficulty,
+        cachedLikes,
         lastCacheUpdateAt,
         accesses
       ];
@@ -78,8 +107,18 @@ class $LevelsTable extends Levels with TableInfo<$LevelsTable, Level> {
           _cachedTitleMeta,
           cachedTitle.isAcceptableOrUnknown(
               data['cached_title']!, _cachedTitleMeta));
-    } else if (isInserting) {
-      context.missing(_cachedTitleMeta);
+    }
+    if (data.containsKey('cached_creator')) {
+      context.handle(
+          _cachedCreatorMeta,
+          cachedCreator.isAcceptableOrUnknown(
+              data['cached_creator']!, _cachedCreatorMeta));
+    }
+    if (data.containsKey('cached_description')) {
+      context.handle(
+          _cachedDescriptionMeta,
+          cachedDescription.isAcceptableOrUnknown(
+              data['cached_description']!, _cachedDescriptionMeta));
     }
     if (data.containsKey('cached_version')) {
       context.handle(
@@ -92,6 +131,12 @@ class $LevelsTable extends Levels with TableInfo<$LevelsTable, Level> {
           _cachedStarsMeta,
           cachedStars.isAcceptableOrUnknown(
               data['cached_stars']!, _cachedStarsMeta));
+    }
+    if (data.containsKey('cached_likes')) {
+      context.handle(
+          _cachedLikesMeta,
+          cachedLikes.isAcceptableOrUnknown(
+              data['cached_likes']!, _cachedLikesMeta));
     }
     if (data.containsKey('last_cache_update_at')) {
       context.handle(
@@ -117,11 +162,20 @@ class $LevelsTable extends Levels with TableInfo<$LevelsTable, Level> {
       levelID: attachedDatabase.typeMapping
           .read(DriftSqlType.int, data['${effectivePrefix}level_i_d'])!,
       cachedTitle: attachedDatabase.typeMapping
-          .read(DriftSqlType.string, data['${effectivePrefix}cached_title'])!,
+          .read(DriftSqlType.string, data['${effectivePrefix}cached_title']),
+      cachedCreator: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}cached_creator']),
+      cachedDescription: attachedDatabase.typeMapping.read(
+          DriftSqlType.string, data['${effectivePrefix}cached_description']),
       cachedVersion: attachedDatabase.typeMapping
           .read(DriftSqlType.int, data['${effectivePrefix}cached_version']),
       cachedStars: attachedDatabase.typeMapping
           .read(DriftSqlType.int, data['${effectivePrefix}cached_stars']),
+      cachedDifficulty: $LevelsTable.$convertercachedDifficultyn.fromSql(
+          attachedDatabase.typeMapping.read(
+              DriftSqlType.int, data['${effectivePrefix}cached_difficulty'])),
+      cachedLikes: attachedDatabase.typeMapping
+          .read(DriftSqlType.int, data['${effectivePrefix}cached_likes']),
       lastCacheUpdateAt: attachedDatabase.typeMapping.read(
           DriftSqlType.dateTime,
           data['${effectivePrefix}last_cache_update_at'])!,
@@ -134,32 +188,62 @@ class $LevelsTable extends Levels with TableInfo<$LevelsTable, Level> {
   $LevelsTable createAlias(String alias) {
     return $LevelsTable(attachedDatabase, alias);
   }
+
+  static JsonTypeConverter2<LevelDifficulty, int, int>
+      $convertercachedDifficulty =
+      const EnumIndexConverter<LevelDifficulty>(LevelDifficulty.values);
+  static JsonTypeConverter2<LevelDifficulty?, int?, int?>
+      $convertercachedDifficultyn =
+      JsonTypeConverter2.asNullable($convertercachedDifficulty);
 }
 
 class Level extends DataClass implements Insertable<Level> {
   final int levelID;
-  final String cachedTitle;
+  final String? cachedTitle;
+  final String? cachedCreator;
+  final String? cachedDescription;
   final int? cachedVersion;
   final int? cachedStars;
+  final LevelDifficulty? cachedDifficulty;
+  final int? cachedLikes;
   final DateTime lastCacheUpdateAt;
   final int accesses;
   const Level(
       {required this.levelID,
-      required this.cachedTitle,
+      this.cachedTitle,
+      this.cachedCreator,
+      this.cachedDescription,
       this.cachedVersion,
       this.cachedStars,
+      this.cachedDifficulty,
+      this.cachedLikes,
       required this.lastCacheUpdateAt,
       required this.accesses});
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
     final map = <String, Expression>{};
     map['level_i_d'] = Variable<int>(levelID);
-    map['cached_title'] = Variable<String>(cachedTitle);
+    if (!nullToAbsent || cachedTitle != null) {
+      map['cached_title'] = Variable<String>(cachedTitle);
+    }
+    if (!nullToAbsent || cachedCreator != null) {
+      map['cached_creator'] = Variable<String>(cachedCreator);
+    }
+    if (!nullToAbsent || cachedDescription != null) {
+      map['cached_description'] = Variable<String>(cachedDescription);
+    }
     if (!nullToAbsent || cachedVersion != null) {
       map['cached_version'] = Variable<int>(cachedVersion);
     }
     if (!nullToAbsent || cachedStars != null) {
       map['cached_stars'] = Variable<int>(cachedStars);
+    }
+    if (!nullToAbsent || cachedDifficulty != null) {
+      map['cached_difficulty'] = Variable<int>(
+          $LevelsTable.$convertercachedDifficultyn.toSql(cachedDifficulty));
+    }
+    if (!nullToAbsent || cachedLikes != null) {
+      map['cached_likes'] = Variable<int>(cachedLikes);
     }
     map['last_cache_update_at'] = Variable<DateTime>(lastCacheUpdateAt);
     map['accesses'] = Variable<int>(accesses);
@@ -169,13 +253,27 @@ class Level extends DataClass implements Insertable<Level> {
   LevelsCompanion toCompanion(bool nullToAbsent) {
     return LevelsCompanion(
       levelID: Value(levelID),
-      cachedTitle: Value(cachedTitle),
+      cachedTitle: cachedTitle == null && nullToAbsent
+          ? const Value.absent()
+          : Value(cachedTitle),
+      cachedCreator: cachedCreator == null && nullToAbsent
+          ? const Value.absent()
+          : Value(cachedCreator),
+      cachedDescription: cachedDescription == null && nullToAbsent
+          ? const Value.absent()
+          : Value(cachedDescription),
       cachedVersion: cachedVersion == null && nullToAbsent
           ? const Value.absent()
           : Value(cachedVersion),
       cachedStars: cachedStars == null && nullToAbsent
           ? const Value.absent()
           : Value(cachedStars),
+      cachedDifficulty: cachedDifficulty == null && nullToAbsent
+          ? const Value.absent()
+          : Value(cachedDifficulty),
+      cachedLikes: cachedLikes == null && nullToAbsent
+          ? const Value.absent()
+          : Value(cachedLikes),
       lastCacheUpdateAt: Value(lastCacheUpdateAt),
       accesses: Value(accesses),
     );
@@ -186,9 +284,15 @@ class Level extends DataClass implements Insertable<Level> {
     serializer ??= driftRuntimeOptions.defaultSerializer;
     return Level(
       levelID: serializer.fromJson<int>(json['levelID']),
-      cachedTitle: serializer.fromJson<String>(json['cachedTitle']),
+      cachedTitle: serializer.fromJson<String?>(json['cachedTitle']),
+      cachedCreator: serializer.fromJson<String?>(json['cachedCreator']),
+      cachedDescription:
+          serializer.fromJson<String?>(json['cachedDescription']),
       cachedVersion: serializer.fromJson<int?>(json['cachedVersion']),
       cachedStars: serializer.fromJson<int?>(json['cachedStars']),
+      cachedDifficulty: $LevelsTable.$convertercachedDifficultyn
+          .fromJson(serializer.fromJson<int?>(json['cachedDifficulty'])),
+      cachedLikes: serializer.fromJson<int?>(json['cachedLikes']),
       lastCacheUpdateAt:
           serializer.fromJson<DateTime>(json['lastCacheUpdateAt']),
       accesses: serializer.fromJson<int>(json['accesses']),
@@ -199,9 +303,14 @@ class Level extends DataClass implements Insertable<Level> {
     serializer ??= driftRuntimeOptions.defaultSerializer;
     return <String, dynamic>{
       'levelID': serializer.toJson<int>(levelID),
-      'cachedTitle': serializer.toJson<String>(cachedTitle),
+      'cachedTitle': serializer.toJson<String?>(cachedTitle),
+      'cachedCreator': serializer.toJson<String?>(cachedCreator),
+      'cachedDescription': serializer.toJson<String?>(cachedDescription),
       'cachedVersion': serializer.toJson<int?>(cachedVersion),
       'cachedStars': serializer.toJson<int?>(cachedStars),
+      'cachedDifficulty': serializer.toJson<int?>(
+          $LevelsTable.$convertercachedDifficultyn.toJson(cachedDifficulty)),
+      'cachedLikes': serializer.toJson<int?>(cachedLikes),
       'lastCacheUpdateAt': serializer.toJson<DateTime>(lastCacheUpdateAt),
       'accesses': serializer.toJson<int>(accesses),
     };
@@ -209,17 +318,30 @@ class Level extends DataClass implements Insertable<Level> {
 
   Level copyWith(
           {int? levelID,
-          String? cachedTitle,
+          Value<String?> cachedTitle = const Value.absent(),
+          Value<String?> cachedCreator = const Value.absent(),
+          Value<String?> cachedDescription = const Value.absent(),
           Value<int?> cachedVersion = const Value.absent(),
           Value<int?> cachedStars = const Value.absent(),
+          Value<LevelDifficulty?> cachedDifficulty = const Value.absent(),
+          Value<int?> cachedLikes = const Value.absent(),
           DateTime? lastCacheUpdateAt,
           int? accesses}) =>
       Level(
         levelID: levelID ?? this.levelID,
-        cachedTitle: cachedTitle ?? this.cachedTitle,
+        cachedTitle: cachedTitle.present ? cachedTitle.value : this.cachedTitle,
+        cachedCreator:
+            cachedCreator.present ? cachedCreator.value : this.cachedCreator,
+        cachedDescription: cachedDescription.present
+            ? cachedDescription.value
+            : this.cachedDescription,
         cachedVersion:
             cachedVersion.present ? cachedVersion.value : this.cachedVersion,
         cachedStars: cachedStars.present ? cachedStars.value : this.cachedStars,
+        cachedDifficulty: cachedDifficulty.present
+            ? cachedDifficulty.value
+            : this.cachedDifficulty,
+        cachedLikes: cachedLikes.present ? cachedLikes.value : this.cachedLikes,
         lastCacheUpdateAt: lastCacheUpdateAt ?? this.lastCacheUpdateAt,
         accesses: accesses ?? this.accesses,
       );
@@ -228,11 +350,22 @@ class Level extends DataClass implements Insertable<Level> {
       levelID: data.levelID.present ? data.levelID.value : this.levelID,
       cachedTitle:
           data.cachedTitle.present ? data.cachedTitle.value : this.cachedTitle,
+      cachedCreator: data.cachedCreator.present
+          ? data.cachedCreator.value
+          : this.cachedCreator,
+      cachedDescription: data.cachedDescription.present
+          ? data.cachedDescription.value
+          : this.cachedDescription,
       cachedVersion: data.cachedVersion.present
           ? data.cachedVersion.value
           : this.cachedVersion,
       cachedStars:
           data.cachedStars.present ? data.cachedStars.value : this.cachedStars,
+      cachedDifficulty: data.cachedDifficulty.present
+          ? data.cachedDifficulty.value
+          : this.cachedDifficulty,
+      cachedLikes:
+          data.cachedLikes.present ? data.cachedLikes.value : this.cachedLikes,
       lastCacheUpdateAt: data.lastCacheUpdateAt.present
           ? data.lastCacheUpdateAt.value
           : this.lastCacheUpdateAt,
@@ -245,8 +378,12 @@ class Level extends DataClass implements Insertable<Level> {
     return (StringBuffer('Level(')
           ..write('levelID: $levelID, ')
           ..write('cachedTitle: $cachedTitle, ')
+          ..write('cachedCreator: $cachedCreator, ')
+          ..write('cachedDescription: $cachedDescription, ')
           ..write('cachedVersion: $cachedVersion, ')
           ..write('cachedStars: $cachedStars, ')
+          ..write('cachedDifficulty: $cachedDifficulty, ')
+          ..write('cachedLikes: $cachedLikes, ')
           ..write('lastCacheUpdateAt: $lastCacheUpdateAt, ')
           ..write('accesses: $accesses')
           ..write(')'))
@@ -254,53 +391,81 @@ class Level extends DataClass implements Insertable<Level> {
   }
 
   @override
-  int get hashCode => Object.hash(levelID, cachedTitle, cachedVersion,
-      cachedStars, lastCacheUpdateAt, accesses);
+  int get hashCode => Object.hash(
+      levelID,
+      cachedTitle,
+      cachedCreator,
+      cachedDescription,
+      cachedVersion,
+      cachedStars,
+      cachedDifficulty,
+      cachedLikes,
+      lastCacheUpdateAt,
+      accesses);
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
       (other is Level &&
           other.levelID == this.levelID &&
           other.cachedTitle == this.cachedTitle &&
+          other.cachedCreator == this.cachedCreator &&
+          other.cachedDescription == this.cachedDescription &&
           other.cachedVersion == this.cachedVersion &&
           other.cachedStars == this.cachedStars &&
+          other.cachedDifficulty == this.cachedDifficulty &&
+          other.cachedLikes == this.cachedLikes &&
           other.lastCacheUpdateAt == this.lastCacheUpdateAt &&
           other.accesses == this.accesses);
 }
 
 class LevelsCompanion extends UpdateCompanion<Level> {
   final Value<int> levelID;
-  final Value<String> cachedTitle;
+  final Value<String?> cachedTitle;
+  final Value<String?> cachedCreator;
+  final Value<String?> cachedDescription;
   final Value<int?> cachedVersion;
   final Value<int?> cachedStars;
+  final Value<LevelDifficulty?> cachedDifficulty;
+  final Value<int?> cachedLikes;
   final Value<DateTime> lastCacheUpdateAt;
   final Value<int> accesses;
   final Value<int> rowid;
   const LevelsCompanion({
     this.levelID = const Value.absent(),
     this.cachedTitle = const Value.absent(),
+    this.cachedCreator = const Value.absent(),
+    this.cachedDescription = const Value.absent(),
     this.cachedVersion = const Value.absent(),
     this.cachedStars = const Value.absent(),
+    this.cachedDifficulty = const Value.absent(),
+    this.cachedLikes = const Value.absent(),
     this.lastCacheUpdateAt = const Value.absent(),
     this.accesses = const Value.absent(),
     this.rowid = const Value.absent(),
   });
   LevelsCompanion.insert({
     required int levelID,
-    required String cachedTitle,
+    this.cachedTitle = const Value.absent(),
+    this.cachedCreator = const Value.absent(),
+    this.cachedDescription = const Value.absent(),
     this.cachedVersion = const Value.absent(),
     this.cachedStars = const Value.absent(),
+    this.cachedDifficulty = const Value.absent(),
+    this.cachedLikes = const Value.absent(),
     required DateTime lastCacheUpdateAt,
     this.accesses = const Value.absent(),
     this.rowid = const Value.absent(),
   })  : levelID = Value(levelID),
-        cachedTitle = Value(cachedTitle),
         lastCacheUpdateAt = Value(lastCacheUpdateAt);
   static Insertable<Level> custom({
     Expression<int>? levelID,
     Expression<String>? cachedTitle,
+    Expression<String>? cachedCreator,
+    Expression<String>? cachedDescription,
     Expression<int>? cachedVersion,
     Expression<int>? cachedStars,
+    Expression<int>? cachedDifficulty,
+    Expression<int>? cachedLikes,
     Expression<DateTime>? lastCacheUpdateAt,
     Expression<int>? accesses,
     Expression<int>? rowid,
@@ -308,8 +473,12 @@ class LevelsCompanion extends UpdateCompanion<Level> {
     return RawValuesInsertable({
       if (levelID != null) 'level_i_d': levelID,
       if (cachedTitle != null) 'cached_title': cachedTitle,
+      if (cachedCreator != null) 'cached_creator': cachedCreator,
+      if (cachedDescription != null) 'cached_description': cachedDescription,
       if (cachedVersion != null) 'cached_version': cachedVersion,
       if (cachedStars != null) 'cached_stars': cachedStars,
+      if (cachedDifficulty != null) 'cached_difficulty': cachedDifficulty,
+      if (cachedLikes != null) 'cached_likes': cachedLikes,
       if (lastCacheUpdateAt != null) 'last_cache_update_at': lastCacheUpdateAt,
       if (accesses != null) 'accesses': accesses,
       if (rowid != null) 'rowid': rowid,
@@ -318,17 +487,25 @@ class LevelsCompanion extends UpdateCompanion<Level> {
 
   LevelsCompanion copyWith(
       {Value<int>? levelID,
-      Value<String>? cachedTitle,
+      Value<String?>? cachedTitle,
+      Value<String?>? cachedCreator,
+      Value<String?>? cachedDescription,
       Value<int?>? cachedVersion,
       Value<int?>? cachedStars,
+      Value<LevelDifficulty?>? cachedDifficulty,
+      Value<int?>? cachedLikes,
       Value<DateTime>? lastCacheUpdateAt,
       Value<int>? accesses,
       Value<int>? rowid}) {
     return LevelsCompanion(
       levelID: levelID ?? this.levelID,
       cachedTitle: cachedTitle ?? this.cachedTitle,
+      cachedCreator: cachedCreator ?? this.cachedCreator,
+      cachedDescription: cachedDescription ?? this.cachedDescription,
       cachedVersion: cachedVersion ?? this.cachedVersion,
       cachedStars: cachedStars ?? this.cachedStars,
+      cachedDifficulty: cachedDifficulty ?? this.cachedDifficulty,
+      cachedLikes: cachedLikes ?? this.cachedLikes,
       lastCacheUpdateAt: lastCacheUpdateAt ?? this.lastCacheUpdateAt,
       accesses: accesses ?? this.accesses,
       rowid: rowid ?? this.rowid,
@@ -344,11 +521,25 @@ class LevelsCompanion extends UpdateCompanion<Level> {
     if (cachedTitle.present) {
       map['cached_title'] = Variable<String>(cachedTitle.value);
     }
+    if (cachedCreator.present) {
+      map['cached_creator'] = Variable<String>(cachedCreator.value);
+    }
+    if (cachedDescription.present) {
+      map['cached_description'] = Variable<String>(cachedDescription.value);
+    }
     if (cachedVersion.present) {
       map['cached_version'] = Variable<int>(cachedVersion.value);
     }
     if (cachedStars.present) {
       map['cached_stars'] = Variable<int>(cachedStars.value);
+    }
+    if (cachedDifficulty.present) {
+      map['cached_difficulty'] = Variable<int>($LevelsTable
+          .$convertercachedDifficultyn
+          .toSql(cachedDifficulty.value));
+    }
+    if (cachedLikes.present) {
+      map['cached_likes'] = Variable<int>(cachedLikes.value);
     }
     if (lastCacheUpdateAt.present) {
       map['last_cache_update_at'] = Variable<DateTime>(lastCacheUpdateAt.value);
@@ -367,8 +558,12 @@ class LevelsCompanion extends UpdateCompanion<Level> {
     return (StringBuffer('LevelsCompanion(')
           ..write('levelID: $levelID, ')
           ..write('cachedTitle: $cachedTitle, ')
+          ..write('cachedCreator: $cachedCreator, ')
+          ..write('cachedDescription: $cachedDescription, ')
           ..write('cachedVersion: $cachedVersion, ')
           ..write('cachedStars: $cachedStars, ')
+          ..write('cachedDifficulty: $cachedDifficulty, ')
+          ..write('cachedLikes: $cachedLikes, ')
           ..write('lastCacheUpdateAt: $lastCacheUpdateAt, ')
           ..write('accesses: $accesses, ')
           ..write('rowid: $rowid')
@@ -734,9 +929,8 @@ class $SubmissionsTable extends Submissions
       const VerificationMeta('levelVersion');
   @override
   late final GeneratedColumn<int> levelVersion = GeneratedColumn<int>(
-      'level_version', aliasedName, true,
-      type: DriftSqlType.int, requiredDuringInsert: false);
-  static const VerificationMeta _statusMeta = const VerificationMeta('status');
+      'level_version', aliasedName, false,
+      type: DriftSqlType.int, requiredDuringInsert: true);
   @override
   late final GeneratedColumnWithTypeConverter<SubmissionStatus, int> status =
       GeneratedColumn<int>('status', aliasedName, false,
@@ -779,8 +973,8 @@ class $SubmissionsTable extends Submissions
       const VerificationMeta('rejectionReason');
   @override
   late final GeneratedColumn<String> rejectionReason = GeneratedColumn<String>(
-      'rejection_reason', aliasedName, true,
-      type: DriftSqlType.string, requiredDuringInsert: false);
+      'rejection_reason', aliasedName, false,
+      type: DriftSqlType.string, requiredDuringInsert: true);
   static const VerificationMeta _reviewedAtMeta =
       const VerificationMeta('reviewedAt');
   @override
@@ -832,8 +1026,9 @@ class $SubmissionsTable extends Submissions
           _levelVersionMeta,
           levelVersion.isAcceptableOrUnknown(
               data['level_version']!, _levelVersionMeta));
+    } else if (isInserting) {
+      context.missing(_levelVersionMeta);
     }
-    context.handle(_statusMeta, const VerificationResult.success());
     if (data.containsKey('replay_hash')) {
       context.handle(
           _replayHashMeta,
@@ -875,6 +1070,8 @@ class $SubmissionsTable extends Submissions
           _rejectionReasonMeta,
           rejectionReason.isAcceptableOrUnknown(
               data['rejection_reason']!, _rejectionReasonMeta));
+    } else if (isInserting) {
+      context.missing(_rejectionReasonMeta);
     }
     if (data.containsKey('reviewed_at')) {
       context.handle(
@@ -904,7 +1101,7 @@ class $SubmissionsTable extends Submissions
       levelID: attachedDatabase.typeMapping
           .read(DriftSqlType.int, data['${effectivePrefix}level_i_d'])!,
       levelVersion: attachedDatabase.typeMapping
-          .read(DriftSqlType.int, data['${effectivePrefix}level_version']),
+          .read(DriftSqlType.int, data['${effectivePrefix}level_version'])!,
       status: $SubmissionsTable.$converterstatus.fromSql(attachedDatabase
           .typeMapping
           .read(DriftSqlType.int, data['${effectivePrefix}status'])!),
@@ -919,7 +1116,7 @@ class $SubmissionsTable extends Submissions
       gdAccountID: attachedDatabase.typeMapping
           .read(DriftSqlType.int, data['${effectivePrefix}gd_account_i_d'])!,
       rejectionReason: attachedDatabase.typeMapping.read(
-          DriftSqlType.string, data['${effectivePrefix}rejection_reason']),
+          DriftSqlType.string, data['${effectivePrefix}rejection_reason'])!,
       reviewedAt: attachedDatabase.typeMapping
           .read(DriftSqlType.dateTime, data['${effectivePrefix}reviewed_at']),
       submittedAt: attachedDatabase.typeMapping
@@ -939,27 +1136,27 @@ class $SubmissionsTable extends Submissions
 class Submission extends DataClass implements Insertable<Submission> {
   final int id;
   final int levelID;
-  final int? levelVersion;
+  final int levelVersion;
   final SubmissionStatus status;
   final Uint8List replayHash;
   final Uint8List? replayData;
   final String modVersion;
   final String gdVersion;
   final int gdAccountID;
-  final String? rejectionReason;
+  final String rejectionReason;
   final DateTime? reviewedAt;
   final DateTime submittedAt;
   const Submission(
       {required this.id,
       required this.levelID,
-      this.levelVersion,
+      required this.levelVersion,
       required this.status,
       required this.replayHash,
       this.replayData,
       required this.modVersion,
       required this.gdVersion,
       required this.gdAccountID,
-      this.rejectionReason,
+      required this.rejectionReason,
       this.reviewedAt,
       required this.submittedAt});
   @override
@@ -967,9 +1164,7 @@ class Submission extends DataClass implements Insertable<Submission> {
     final map = <String, Expression>{};
     map['id'] = Variable<int>(id);
     map['level_i_d'] = Variable<int>(levelID);
-    if (!nullToAbsent || levelVersion != null) {
-      map['level_version'] = Variable<int>(levelVersion);
-    }
+    map['level_version'] = Variable<int>(levelVersion);
     {
       map['status'] =
           Variable<int>($SubmissionsTable.$converterstatus.toSql(status));
@@ -981,9 +1176,7 @@ class Submission extends DataClass implements Insertable<Submission> {
     map['mod_version'] = Variable<String>(modVersion);
     map['gd_version'] = Variable<String>(gdVersion);
     map['gd_account_i_d'] = Variable<int>(gdAccountID);
-    if (!nullToAbsent || rejectionReason != null) {
-      map['rejection_reason'] = Variable<String>(rejectionReason);
-    }
+    map['rejection_reason'] = Variable<String>(rejectionReason);
     if (!nullToAbsent || reviewedAt != null) {
       map['reviewed_at'] = Variable<DateTime>(reviewedAt);
     }
@@ -995,9 +1188,7 @@ class Submission extends DataClass implements Insertable<Submission> {
     return SubmissionsCompanion(
       id: Value(id),
       levelID: Value(levelID),
-      levelVersion: levelVersion == null && nullToAbsent
-          ? const Value.absent()
-          : Value(levelVersion),
+      levelVersion: Value(levelVersion),
       status: Value(status),
       replayHash: Value(replayHash),
       replayData: replayData == null && nullToAbsent
@@ -1006,9 +1197,7 @@ class Submission extends DataClass implements Insertable<Submission> {
       modVersion: Value(modVersion),
       gdVersion: Value(gdVersion),
       gdAccountID: Value(gdAccountID),
-      rejectionReason: rejectionReason == null && nullToAbsent
-          ? const Value.absent()
-          : Value(rejectionReason),
+      rejectionReason: Value(rejectionReason),
       reviewedAt: reviewedAt == null && nullToAbsent
           ? const Value.absent()
           : Value(reviewedAt),
@@ -1022,7 +1211,7 @@ class Submission extends DataClass implements Insertable<Submission> {
     return Submission(
       id: serializer.fromJson<int>(json['id']),
       levelID: serializer.fromJson<int>(json['levelID']),
-      levelVersion: serializer.fromJson<int?>(json['levelVersion']),
+      levelVersion: serializer.fromJson<int>(json['levelVersion']),
       status: $SubmissionsTable.$converterstatus
           .fromJson(serializer.fromJson<int>(json['status'])),
       replayHash: serializer.fromJson<Uint8List>(json['replayHash']),
@@ -1030,7 +1219,7 @@ class Submission extends DataClass implements Insertable<Submission> {
       modVersion: serializer.fromJson<String>(json['modVersion']),
       gdVersion: serializer.fromJson<String>(json['gdVersion']),
       gdAccountID: serializer.fromJson<int>(json['gdAccountID']),
-      rejectionReason: serializer.fromJson<String?>(json['rejectionReason']),
+      rejectionReason: serializer.fromJson<String>(json['rejectionReason']),
       reviewedAt: serializer.fromJson<DateTime?>(json['reviewedAt']),
       submittedAt: serializer.fromJson<DateTime>(json['submittedAt']),
     );
@@ -1041,7 +1230,7 @@ class Submission extends DataClass implements Insertable<Submission> {
     return <String, dynamic>{
       'id': serializer.toJson<int>(id),
       'levelID': serializer.toJson<int>(levelID),
-      'levelVersion': serializer.toJson<int?>(levelVersion),
+      'levelVersion': serializer.toJson<int>(levelVersion),
       'status': serializer
           .toJson<int>($SubmissionsTable.$converterstatus.toJson(status)),
       'replayHash': serializer.toJson<Uint8List>(replayHash),
@@ -1049,7 +1238,7 @@ class Submission extends DataClass implements Insertable<Submission> {
       'modVersion': serializer.toJson<String>(modVersion),
       'gdVersion': serializer.toJson<String>(gdVersion),
       'gdAccountID': serializer.toJson<int>(gdAccountID),
-      'rejectionReason': serializer.toJson<String?>(rejectionReason),
+      'rejectionReason': serializer.toJson<String>(rejectionReason),
       'reviewedAt': serializer.toJson<DateTime?>(reviewedAt),
       'submittedAt': serializer.toJson<DateTime>(submittedAt),
     };
@@ -1058,30 +1247,27 @@ class Submission extends DataClass implements Insertable<Submission> {
   Submission copyWith(
           {int? id,
           int? levelID,
-          Value<int?> levelVersion = const Value.absent(),
+          int? levelVersion,
           SubmissionStatus? status,
           Uint8List? replayHash,
           Value<Uint8List?> replayData = const Value.absent(),
           String? modVersion,
           String? gdVersion,
           int? gdAccountID,
-          Value<String?> rejectionReason = const Value.absent(),
+          String? rejectionReason,
           Value<DateTime?> reviewedAt = const Value.absent(),
           DateTime? submittedAt}) =>
       Submission(
         id: id ?? this.id,
         levelID: levelID ?? this.levelID,
-        levelVersion:
-            levelVersion.present ? levelVersion.value : this.levelVersion,
+        levelVersion: levelVersion ?? this.levelVersion,
         status: status ?? this.status,
         replayHash: replayHash ?? this.replayHash,
         replayData: replayData.present ? replayData.value : this.replayData,
         modVersion: modVersion ?? this.modVersion,
         gdVersion: gdVersion ?? this.gdVersion,
         gdAccountID: gdAccountID ?? this.gdAccountID,
-        rejectionReason: rejectionReason.present
-            ? rejectionReason.value
-            : this.rejectionReason,
+        rejectionReason: rejectionReason ?? this.rejectionReason,
         reviewedAt: reviewedAt.present ? reviewedAt.value : this.reviewedAt,
         submittedAt: submittedAt ?? this.submittedAt,
       );
@@ -1166,14 +1352,14 @@ class Submission extends DataClass implements Insertable<Submission> {
 class SubmissionsCompanion extends UpdateCompanion<Submission> {
   final Value<int> id;
   final Value<int> levelID;
-  final Value<int?> levelVersion;
+  final Value<int> levelVersion;
   final Value<SubmissionStatus> status;
   final Value<Uint8List> replayHash;
   final Value<Uint8List?> replayData;
   final Value<String> modVersion;
   final Value<String> gdVersion;
   final Value<int> gdAccountID;
-  final Value<String?> rejectionReason;
+  final Value<String> rejectionReason;
   final Value<DateTime?> reviewedAt;
   final Value<DateTime> submittedAt;
   const SubmissionsCompanion({
@@ -1193,22 +1379,24 @@ class SubmissionsCompanion extends UpdateCompanion<Submission> {
   SubmissionsCompanion.insert({
     this.id = const Value.absent(),
     required int levelID,
-    this.levelVersion = const Value.absent(),
+    required int levelVersion,
     required SubmissionStatus status,
     required Uint8List replayHash,
     this.replayData = const Value.absent(),
     required String modVersion,
     required String gdVersion,
     required int gdAccountID,
-    this.rejectionReason = const Value.absent(),
+    required String rejectionReason,
     this.reviewedAt = const Value.absent(),
     required DateTime submittedAt,
   })  : levelID = Value(levelID),
+        levelVersion = Value(levelVersion),
         status = Value(status),
         replayHash = Value(replayHash),
         modVersion = Value(modVersion),
         gdVersion = Value(gdVersion),
         gdAccountID = Value(gdAccountID),
+        rejectionReason = Value(rejectionReason),
         submittedAt = Value(submittedAt);
   static Insertable<Submission> custom({
     Expression<int>? id,
@@ -1243,14 +1431,14 @@ class SubmissionsCompanion extends UpdateCompanion<Submission> {
   SubmissionsCompanion copyWith(
       {Value<int>? id,
       Value<int>? levelID,
-      Value<int?>? levelVersion,
+      Value<int>? levelVersion,
       Value<SubmissionStatus>? status,
       Value<Uint8List>? replayHash,
       Value<Uint8List?>? replayData,
       Value<String>? modVersion,
       Value<String>? gdVersion,
       Value<int>? gdAccountID,
-      Value<String?>? rejectionReason,
+      Value<String>? rejectionReason,
       Value<DateTime?>? reviewedAt,
       Value<DateTime>? submittedAt}) {
     return SubmissionsCompanion(
@@ -1348,18 +1536,26 @@ abstract class _$ShowcaseDatabase extends GeneratedDatabase {
 
 typedef $$LevelsTableCreateCompanionBuilder = LevelsCompanion Function({
   required int levelID,
-  required String cachedTitle,
+  Value<String?> cachedTitle,
+  Value<String?> cachedCreator,
+  Value<String?> cachedDescription,
   Value<int?> cachedVersion,
   Value<int?> cachedStars,
+  Value<LevelDifficulty?> cachedDifficulty,
+  Value<int?> cachedLikes,
   required DateTime lastCacheUpdateAt,
   Value<int> accesses,
   Value<int> rowid,
 });
 typedef $$LevelsTableUpdateCompanionBuilder = LevelsCompanion Function({
   Value<int> levelID,
-  Value<String> cachedTitle,
+  Value<String?> cachedTitle,
+  Value<String?> cachedCreator,
+  Value<String?> cachedDescription,
   Value<int?> cachedVersion,
   Value<int?> cachedStars,
+  Value<LevelDifficulty?> cachedDifficulty,
+  Value<int?> cachedLikes,
   Value<DateTime> lastCacheUpdateAt,
   Value<int> accesses,
   Value<int> rowid,
@@ -1377,7 +1573,8 @@ final class $$LevelsTableReferences
 
   $$SubmissionsTableProcessedTableManager get submissionsRefs {
     final manager = $$SubmissionsTableTableManager($_db, $_db.submissions)
-        .filter((f) => f.levelID.levelID($_item.levelID));
+        .filter((f) =>
+            f.levelID.levelID.sqlEquals($_itemColumn<int>('level_i_d')!));
 
     final cache = $_typedResult.readTableOrNull(_submissionsRefsTable($_db));
     return ProcessedTableManager(
@@ -1400,11 +1597,26 @@ class $$LevelsTableFilterComposer
   ColumnFilters<String> get cachedTitle => $composableBuilder(
       column: $table.cachedTitle, builder: (column) => ColumnFilters(column));
 
+  ColumnFilters<String> get cachedCreator => $composableBuilder(
+      column: $table.cachedCreator, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<String> get cachedDescription => $composableBuilder(
+      column: $table.cachedDescription,
+      builder: (column) => ColumnFilters(column));
+
   ColumnFilters<int> get cachedVersion => $composableBuilder(
       column: $table.cachedVersion, builder: (column) => ColumnFilters(column));
 
   ColumnFilters<int> get cachedStars => $composableBuilder(
       column: $table.cachedStars, builder: (column) => ColumnFilters(column));
+
+  ColumnWithTypeConverterFilters<LevelDifficulty?, LevelDifficulty, int>
+      get cachedDifficulty => $composableBuilder(
+          column: $table.cachedDifficulty,
+          builder: (column) => ColumnWithTypeConverterFilters(column));
+
+  ColumnFilters<int> get cachedLikes => $composableBuilder(
+      column: $table.cachedLikes, builder: (column) => ColumnFilters(column));
 
   ColumnFilters<DateTime> get lastCacheUpdateAt => $composableBuilder(
       column: $table.lastCacheUpdateAt,
@@ -1450,12 +1662,27 @@ class $$LevelsTableOrderingComposer
   ColumnOrderings<String> get cachedTitle => $composableBuilder(
       column: $table.cachedTitle, builder: (column) => ColumnOrderings(column));
 
+  ColumnOrderings<String> get cachedCreator => $composableBuilder(
+      column: $table.cachedCreator,
+      builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<String> get cachedDescription => $composableBuilder(
+      column: $table.cachedDescription,
+      builder: (column) => ColumnOrderings(column));
+
   ColumnOrderings<int> get cachedVersion => $composableBuilder(
       column: $table.cachedVersion,
       builder: (column) => ColumnOrderings(column));
 
   ColumnOrderings<int> get cachedStars => $composableBuilder(
       column: $table.cachedStars, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<int> get cachedDifficulty => $composableBuilder(
+      column: $table.cachedDifficulty,
+      builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<int> get cachedLikes => $composableBuilder(
+      column: $table.cachedLikes, builder: (column) => ColumnOrderings(column));
 
   ColumnOrderings<DateTime> get lastCacheUpdateAt => $composableBuilder(
       column: $table.lastCacheUpdateAt,
@@ -1480,11 +1707,24 @@ class $$LevelsTableAnnotationComposer
   GeneratedColumn<String> get cachedTitle => $composableBuilder(
       column: $table.cachedTitle, builder: (column) => column);
 
+  GeneratedColumn<String> get cachedCreator => $composableBuilder(
+      column: $table.cachedCreator, builder: (column) => column);
+
+  GeneratedColumn<String> get cachedDescription => $composableBuilder(
+      column: $table.cachedDescription, builder: (column) => column);
+
   GeneratedColumn<int> get cachedVersion => $composableBuilder(
       column: $table.cachedVersion, builder: (column) => column);
 
   GeneratedColumn<int> get cachedStars => $composableBuilder(
       column: $table.cachedStars, builder: (column) => column);
+
+  GeneratedColumnWithTypeConverter<LevelDifficulty?, int>
+      get cachedDifficulty => $composableBuilder(
+          column: $table.cachedDifficulty, builder: (column) => column);
+
+  GeneratedColumn<int> get cachedLikes => $composableBuilder(
+      column: $table.cachedLikes, builder: (column) => column);
 
   GeneratedColumn<DateTime> get lastCacheUpdateAt => $composableBuilder(
       column: $table.lastCacheUpdateAt, builder: (column) => column);
@@ -1538,9 +1778,13 @@ class $$LevelsTableTableManager extends RootTableManager<
               $$LevelsTableAnnotationComposer($db: db, $table: table),
           updateCompanionCallback: ({
             Value<int> levelID = const Value.absent(),
-            Value<String> cachedTitle = const Value.absent(),
+            Value<String?> cachedTitle = const Value.absent(),
+            Value<String?> cachedCreator = const Value.absent(),
+            Value<String?> cachedDescription = const Value.absent(),
             Value<int?> cachedVersion = const Value.absent(),
             Value<int?> cachedStars = const Value.absent(),
+            Value<LevelDifficulty?> cachedDifficulty = const Value.absent(),
+            Value<int?> cachedLikes = const Value.absent(),
             Value<DateTime> lastCacheUpdateAt = const Value.absent(),
             Value<int> accesses = const Value.absent(),
             Value<int> rowid = const Value.absent(),
@@ -1548,17 +1792,25 @@ class $$LevelsTableTableManager extends RootTableManager<
               LevelsCompanion(
             levelID: levelID,
             cachedTitle: cachedTitle,
+            cachedCreator: cachedCreator,
+            cachedDescription: cachedDescription,
             cachedVersion: cachedVersion,
             cachedStars: cachedStars,
+            cachedDifficulty: cachedDifficulty,
+            cachedLikes: cachedLikes,
             lastCacheUpdateAt: lastCacheUpdateAt,
             accesses: accesses,
             rowid: rowid,
           ),
           createCompanionCallback: ({
             required int levelID,
-            required String cachedTitle,
+            Value<String?> cachedTitle = const Value.absent(),
+            Value<String?> cachedCreator = const Value.absent(),
+            Value<String?> cachedDescription = const Value.absent(),
             Value<int?> cachedVersion = const Value.absent(),
             Value<int?> cachedStars = const Value.absent(),
+            Value<LevelDifficulty?> cachedDifficulty = const Value.absent(),
+            Value<int?> cachedLikes = const Value.absent(),
             required DateTime lastCacheUpdateAt,
             Value<int> accesses = const Value.absent(),
             Value<int> rowid = const Value.absent(),
@@ -1566,8 +1818,12 @@ class $$LevelsTableTableManager extends RootTableManager<
               LevelsCompanion.insert(
             levelID: levelID,
             cachedTitle: cachedTitle,
+            cachedCreator: cachedCreator,
+            cachedDescription: cachedDescription,
             cachedVersion: cachedVersion,
             cachedStars: cachedStars,
+            cachedDifficulty: cachedDifficulty,
+            cachedLikes: cachedLikes,
             lastCacheUpdateAt: lastCacheUpdateAt,
             accesses: accesses,
             rowid: rowid,
@@ -1584,7 +1840,7 @@ class $$LevelsTableTableManager extends RootTableManager<
               getPrefetchedDataCallback: (items) async {
                 return [
                   if (submissionsRefs)
-                    await $_getPrefetchedData(
+                    await $_getPrefetchedData<Level, $LevelsTable, Submission>(
                         currentTable: table,
                         referencedTable:
                             $$LevelsTableReferences._submissionsRefsTable(db),
@@ -1643,7 +1899,8 @@ final class $$UsersTableReferences
 
   $$SubmissionsTableProcessedTableManager get submissionsRefs {
     final manager = $$SubmissionsTableTableManager($_db, $_db.submissions)
-        .filter((f) => f.gdAccountID.accountID($_item.accountID));
+        .filter((f) => f.gdAccountID.accountID
+            .sqlEquals($_itemColumn<int>('account_i_d')!));
 
     final cache = $_typedResult.readTableOrNull(_submissionsRefsTable($_db));
     return ProcessedTableManager(
@@ -1839,7 +2096,7 @@ class $$UsersTableTableManager extends RootTableManager<
               getPrefetchedDataCallback: (items) async {
                 return [
                   if (submissionsRefs)
-                    await $_getPrefetchedData(
+                    await $_getPrefetchedData<User, $UsersTable, Submission>(
                         currentTable: table,
                         referencedTable:
                             $$UsersTableReferences._submissionsRefsTable(db),
@@ -1873,14 +2130,14 @@ typedef $$SubmissionsTableCreateCompanionBuilder = SubmissionsCompanion
     Function({
   Value<int> id,
   required int levelID,
-  Value<int?> levelVersion,
+  required int levelVersion,
   required SubmissionStatus status,
   required Uint8List replayHash,
   Value<Uint8List?> replayData,
   required String modVersion,
   required String gdVersion,
   required int gdAccountID,
-  Value<String?> rejectionReason,
+  required String rejectionReason,
   Value<DateTime?> reviewedAt,
   required DateTime submittedAt,
 });
@@ -1888,14 +2145,14 @@ typedef $$SubmissionsTableUpdateCompanionBuilder = SubmissionsCompanion
     Function({
   Value<int> id,
   Value<int> levelID,
-  Value<int?> levelVersion,
+  Value<int> levelVersion,
   Value<SubmissionStatus> status,
   Value<Uint8List> replayHash,
   Value<Uint8List?> replayData,
   Value<String> modVersion,
   Value<String> gdVersion,
   Value<int> gdAccountID,
-  Value<String?> rejectionReason,
+  Value<String> rejectionReason,
   Value<DateTime?> reviewedAt,
   Value<DateTime> submittedAt,
 });
@@ -1909,8 +2166,10 @@ final class $$SubmissionsTableReferences
           $_aliasNameGenerator(db.submissions.levelID, db.levels.levelID));
 
   $$LevelsTableProcessedTableManager get levelID {
+    final $_column = $_itemColumn<int>('level_i_d')!;
+
     final manager = $$LevelsTableTableManager($_db, $_db.levels)
-        .filter((f) => f.levelID($_item.levelID!));
+        .filter((f) => f.levelID.sqlEquals($_column));
     final item = $_typedResult.readTableOrNull(_levelIDTable($_db));
     if (item == null) return manager;
     return ProcessedTableManager(
@@ -1922,8 +2181,10 @@ final class $$SubmissionsTableReferences
           $_aliasNameGenerator(db.submissions.gdAccountID, db.users.accountID));
 
   $$UsersTableProcessedTableManager get gdAccountID {
+    final $_column = $_itemColumn<int>('gd_account_i_d')!;
+
     final manager = $$UsersTableTableManager($_db, $_db.users)
-        .filter((f) => f.accountID($_item.gdAccountID!));
+        .filter((f) => f.accountID.sqlEquals($_column));
     final item = $_typedResult.readTableOrNull(_gdAccountIDTable($_db));
     if (item == null) return manager;
     return ProcessedTableManager(
@@ -2201,14 +2462,14 @@ class $$SubmissionsTableTableManager extends RootTableManager<
           updateCompanionCallback: ({
             Value<int> id = const Value.absent(),
             Value<int> levelID = const Value.absent(),
-            Value<int?> levelVersion = const Value.absent(),
+            Value<int> levelVersion = const Value.absent(),
             Value<SubmissionStatus> status = const Value.absent(),
             Value<Uint8List> replayHash = const Value.absent(),
             Value<Uint8List?> replayData = const Value.absent(),
             Value<String> modVersion = const Value.absent(),
             Value<String> gdVersion = const Value.absent(),
             Value<int> gdAccountID = const Value.absent(),
-            Value<String?> rejectionReason = const Value.absent(),
+            Value<String> rejectionReason = const Value.absent(),
             Value<DateTime?> reviewedAt = const Value.absent(),
             Value<DateTime> submittedAt = const Value.absent(),
           }) =>
@@ -2229,14 +2490,14 @@ class $$SubmissionsTableTableManager extends RootTableManager<
           createCompanionCallback: ({
             Value<int> id = const Value.absent(),
             required int levelID,
-            Value<int?> levelVersion = const Value.absent(),
+            required int levelVersion,
             required SubmissionStatus status,
             required Uint8List replayHash,
             Value<Uint8List?> replayData = const Value.absent(),
             required String modVersion,
             required String gdVersion,
             required int gdAccountID,
-            Value<String?> rejectionReason = const Value.absent(),
+            required String rejectionReason,
             Value<DateTime?> reviewedAt = const Value.absent(),
             required DateTime submittedAt,
           }) =>

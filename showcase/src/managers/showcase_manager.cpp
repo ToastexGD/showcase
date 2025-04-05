@@ -14,33 +14,26 @@
 #include "Geode/utils/web.hpp"
 #include "base64.hpp"
 #include "dashauth.hpp"
-#include "showcase_auto_manager.hpp"
+#include <WinBase.h>
+#include <filesystem>
 #include <gdr/gdr.hpp>
 #include <matjson.hpp>
 #include <optional>
+
+const static int MONTH_IN_SECONDS = 30 * 24 * 60 * 60;
 
 bool ShowcaseBotManager::init() {
   if (!CCNode::init())
     return false;
 
+  m_gdVersion = GEODE_GD_VERSION_STRING;
+  m_modVersion = Mod::get()->getVersion().toVString();
+  m_modVersion.erase(0, 1); // Remove the 'v' from the version string.
+  log::info("mod version: {}", m_modVersion);
+
   m_state = ShowcaseBotState::Idle;
-  m_queueDir = Mod::get()->getSaveDir() / "queue";
-
-  m_uploadSubsReqListener.bind([](auto e) {
-    if (web::WebResponse *value = e->getValue()) {
-      if (value->code() != 200) {
-        log::info("Error: got {} status code for upload_submissions.", value->code());
-        if (!value->string().isErr()) {
-          log::info("upload_submissions failed due to: {}", value->string().unwrap());
-        }
-        return;
-      }
-
-      log::info("Added!");
-    } else if (web::WebProgress *progress = e->getProgress()) {
-    } else if (e->isCancelled()) {
-    }
-  });
+  m_queueDir = Mod::get()->getSaveDir() / fmt::format("queue-{}-{}", m_gdVersion, m_modVersion);
+  std::filesystem::create_directories(m_queueDir);
 
   if (isTermsAccepted()) {
     verifyToken();
@@ -85,18 +78,9 @@ std::optional<std::string> ShowcaseBotManager::getDashAuthToken() {
 }
 
 void ShowcaseBotManager::onTokenVerified() {
+  log::info("DEBUG: State changed to recording.");
   m_state = ShowcaseBotState::Recording;
-  tryUpload();
-}
-
-void ShowcaseBotManager::loadReplyFromQueueFile(int32_t levelID) {
-  std::filesystem::path queueFile = m_queueDir / fmt::format("{}.gdr", levelID);
-  log::info("Loading queue file: {}", queueFile);
-  std::vector<uint8_t> rawReplayData = binaryFileContent(queueFile);
-  log::info("Bytes: {}", rawReplayData.size());
-
-  m_replay = ShowcaseBotReplay::importData(rawReplayData);
-  log::info("Loaded replay");
+  tryUploadSingle();
 }
 
 void ShowcaseBotManager::verifyToken() {
@@ -107,6 +91,8 @@ void ShowcaseBotManager::verifyToken() {
   }
 
   auto savedToken = getDashAuthToken();
+
+  // TODO: check if mod's server is running first and try to auth through server first.
 
   if (savedToken.has_value()) {
     m_verifyDashauthTokenListener.bind([this](auto e) {
@@ -157,11 +143,6 @@ void ShowcaseBotManager::verifyToken() {
 
 void ShowcaseBotManager::loadPlayReplayButton(GJGameLevel *level, LevelInfoLayer *levelInfoLayer,
                                               CCMenuItemSpriteExtra *playReplayButton) {
-  auto autoManager = ShowcaseAutoManager::get();
-  if (autoManager->m_autoEnabled) {
-    return;
-  }
-
   m_loadedReplay = std::nullopt;
   playReplayButton->setVisible(false);
 
@@ -183,18 +164,19 @@ void ShowcaseBotManager::loadPlayReplayButton(GJGameLevel *level, LevelInfoLayer
 
         if (web::WebResponse *value = e->getValue()) {
           if (value == nullptr || value->code() != 200) {
-            log::info("Failed to get replay.");
+            log::info("Failed to get replay({}): {}", value->code(), value != nullptr ? value->string().unwrapOr("No message.") : "No response.");
             return;
           }
           log::info("Got replay for level.");
-          // TODO make sure current scene is still level info layer
-          // auto foundLevelInfoLayer =
-          // CCDirector::get()->getRunningScene()->getChildByID("LevelInfoLayer"); log::info("Level
-          // Info Layer: {}", foundLevelInfoLayer);
           auto rawReplayDataStr = base64::from_base64(value->string().unwrap());
           std::vector<uint8_t> rawReplayData(rawReplayDataStr.begin(), rawReplayDataStr.end());
 
-          m_loadedReplay = ShowcaseBotReplay::importData(rawReplayData);
+          const auto importedReplayRes = ShowcaseBotReplay::importData(rawReplayData);
+          if (importedReplayRes.isErr()) {
+            log::error("Failed to import replay data: {}", importedReplayRes.unwrapErr());
+            return;
+          }
+          m_loadedReplay = importedReplayRes.unwrap();
           playReplayButton->setVisible(true);
           return;
         }
@@ -202,8 +184,8 @@ void ShowcaseBotManager::loadPlayReplayButton(GJGameLevel *level, LevelInfoLayer
 
   auto requestBody = matjson::makeObject({
       {"levelID", levelID},
-      {"modVersion", "1.0.0-alpha.1"},
-      {"gdVersion", "2.2074"},
+      {"modVersion", m_modVersion},
+      {"gdVersion", m_gdVersion},
   });
 
   auto task = web::WebRequest()
@@ -222,7 +204,7 @@ void ShowcaseBotManager::onPlayReplayPressed(LevelInfoLayer *levelInfoLayer) {
 }
 
 void ShowcaseBotManager::onLevelExit(PlayLayer *playLayer) {
-
+  log::info("DEBUG: State changed to recording (2).");
   clearReplay();
   m_state =
       getDashAuthToken() != std::nullopt ? ShowcaseBotState::Recording : ShowcaseBotState::Idle;
@@ -236,7 +218,7 @@ void ShowcaseBotManager::onCommandProcessed(GJBaseGameLayer *baseGameLayer) {
   case ShowcaseBotState::Playing:
     int currentFrame = baseGameLayer->m_gameState.m_currentProgress;
 
-    for (const gdr::Input &input : getInputs(currentFrame)) {
+    for (const gdr::Input<> &input : getInputs(currentFrame)) {
       baseGameLayer->handleButton(input.down, static_cast<int>(input.button), !input.player2);
     }
     return;
@@ -244,18 +226,13 @@ void ShowcaseBotManager::onCommandProcessed(GJBaseGameLayer *baseGameLayer) {
 }
 
 bool ShowcaseBotManager::onLevelComplete(PlayLayer *playLayer) {
-  auto autoManager = ShowcaseAutoManager::get();
-  if (autoManager->m_autoEnabled) {
-    return autoManager->onLevelComplete(playLayer);
-  }
-
   switch (m_state) {
   case ShowcaseBotState::Idle: {
     return true;
   }
   case ShowcaseBotState::Recording: {
     if (shouldLevelBeReplay(playLayer->m_level)) {
-      ShowcaseBotManager::get()->saveCurrentReplay(playLayer->m_level->m_levelID.value());
+      ShowcaseBotManager::get()->saveCurrentReplay(playLayer->m_level->m_levelID.value(), playLayer->m_level->m_levelVersion);
     }
     return true;
   }
@@ -270,18 +247,15 @@ bool ShowcaseBotManager::shouldLevelBeReplay(GJGameLevel *level) {
   int levelID = level->m_levelID.value();
   bool isRated = level->m_stars.value() >= 2;
   bool isClassic = !level->isPlatformer();
-  return isRated && isClassic;
+  bool isPractice = m_isCurrentRunPractice; // TODO: Get this from a field of a GD object
+  return isRated && isClassic && levelID > 4000 && !isPractice;
 }
 
 void ShowcaseBotManager::onLevelRestart(PlayLayer *playLayer) {
-  auto autoManager = ShowcaseAutoManager::get();
-  if (autoManager->m_autoEnabled) {
-    autoManager->onLevelRestart(playLayer);
-    return;
-  }
-
   switch (m_state) {
   case ShowcaseBotState::Recording: {
+    m_isCurrentRunPractice = false;
+
     if (!shouldLevelBeReplay(playLayer->m_level)) {
       return;
     }
@@ -293,6 +267,7 @@ void ShowcaseBotManager::onLevelRestart(PlayLayer *playLayer) {
     if (currentFrame == 0 || currentFrame == 1) {
       clearReplay();
     } else {
+      m_isCurrentRunPractice = true;
       removeKeysSinceFrame(currentFrame + 1);
       // If holding an input while spawning (either from a checkpoint or from
       // the start) it happens on the NEXT frame. So we will prepend release
@@ -343,10 +318,10 @@ bool ShowcaseBotManager::onHandleUserButton(GJBaseGameLayer *baseGameLayer, bool
   }
 }
 
-std::vector<gdr::Input> ShowcaseBotManager::getInputs(int frame) {
-  std::vector<gdr::Input> result;
+std::vector<gdr::Input<>> ShowcaseBotManager::getInputs(int frame) {
+  std::vector<gdr::Input<>> result;
   std::copy_if(m_replay.inputs.begin(), m_replay.inputs.end(), std::back_inserter(result),
-               [frame](const gdr::Input &input) { return input.frame == frame; });
+               [frame](const gdr::Input<> &input) { return input.frame == frame; });
   return result;
 }
 
@@ -360,39 +335,28 @@ void ShowcaseBotManager::removeKeysSinceFrame(int frame) {
   }
 }
 
-void ShowcaseBotManager::clearReplay() { m_replay.inputs.clear(); }
-
-void ShowcaseBotManager::saveReplay(int level) {
-  log::info("Saving level {} to queue.", level);
-  if (!std::filesystem::exists(m_queueDir)) {
-    std::filesystem::create_directories(m_queueDir);
-  }
-  std::filesystem::path queueFile = m_queueDir / fmt::format("{}.gdr", level);
-  if (std::filesystem::exists(queueFile)) {
-    std::filesystem::remove(queueFile);
-  }
-
-  std::ofstream f(queueFile, std::ios::binary);
-  auto data = m_replay.exportData(false);
-
-  f.write(reinterpret_cast<const char *>(data.data()), data.size());
-  f.close();
-
-  log::info("Saved level {} to queue as {}.", level, queueFile.string());
-  tryUpload();
+void ShowcaseBotManager::clearReplay() {
+  m_getReplayListener.getFilter().cancel();
+  m_replay.inputs.clear();
 }
 
-void ShowcaseBotManager::saveCurrentReplay(int32_t levelID) {
+void ShowcaseBotManager::saveCurrentReplay(int32_t levelID, int32_t levelVersion) {
   log::info("Saving current replay to level {} to queue.", levelID);
   if (!std::filesystem::exists(m_queueDir)) {
     std::filesystem::create_directories(m_queueDir);
   }
-  std::filesystem::path queueFile = m_queueDir / fmt::format("{}.gdr", levelID);
+  const std::filesystem::path queueFile = m_queueDir / fmt::format("{}-{}-{}.gdr2", levelID, levelVersion, time(nullptr));
   if (std::filesystem::exists(queueFile)) {
     std::filesystem::remove(queueFile);
   }
 
-  auto content = m_replay.exportData(false);
+  const auto contentRes = m_replay.exportData();
+  if (contentRes.isErr()) {
+    log::error("Failed to export replay data: {}", contentRes.unwrapErr());
+    return;
+  }
+  const auto content = contentRes.unwrap();
+
 
   std::ofstream file(queueFile, std::ios::binary);
   file.write(reinterpret_cast<const char *>(content.data()), content.size());
@@ -400,124 +364,169 @@ void ShowcaseBotManager::saveCurrentReplay(int32_t levelID) {
 
   log::info("Saved level {} to queue as {}.", levelID, queueFile.string());
 
-  tryUpload();
+  tryUploadSingle();
 }
 
-void ShowcaseBotManager::tryUpload() {
-  log::info("Trying to upload");
+enum class ReplayFileEvaluation {
+  Ignore,
+  Delete,
+  Ok,
+};
+
+bool getInfoFromSubmissionName(const char* submissionName, int* levelID, int* levelVersion, int* date) {
+  return std::sscanf(submissionName, "%d-%d-%d.gdr2", levelID, levelVersion, date) == 3;
+}
+
+ReplayFileEvaluation evalReplayFileForUpload(std::filesystem::directory_entry& entry) {
+  if (!entry.is_regular_file())
+    return ReplayFileEvaluation::Ignore;
+
+  if (entry.path().extension() != ".gdr2")
+    return ReplayFileEvaluation::Ignore;
+
+  int levelID, levelVersion, date;
+  if (!getInfoFromSubmissionName(entry.path().filename().string().c_str(), &levelID, &levelVersion, &date))
+    return ReplayFileEvaluation::Delete;
+
+  if (time(nullptr) - date >= MONTH_IN_SECONDS)
+    return ReplayFileEvaluation::Delete;
+
+  const uintmax_t fileSize = std::filesystem::file_size(entry.path());
+  if (fileSize > 5 * 1024 * 1024) // TODO: fetch dynamically from server
+    return ReplayFileEvaluation::Delete;
+
+  return ReplayFileEvaluation::Ok;
+}
+
+Result<matjson::Value> ShowcaseBotManager::makeSubmissionInfo(std::filesystem::directory_entry& entry) {
+  int levelID, levelVersion, date;
+  if (!getInfoFromSubmissionName(entry.path().filename().string().c_str(), &levelID, &levelVersion, &date)) {
+    log::error("Failed uploading: Failed to get info from submission name.");
+    return Err("Failed to get info from submission name.");
+  }
+
+  return Ok(matjson::makeObject({
+    {"levelID", levelID},
+    {"levelVersion", levelVersion},
+    {"modVersion", m_modVersion},
+    {"gdVersion", m_gdVersion},
+  }));
+}
+
+void ShowcaseBotManager::tryUploadSingle() {
+  log::info("Trying to upload.");
 
   if (!getDashAuthToken().has_value()) {
+    log::error("Failed uploading: No DashAuth token.");
     return;
   }
 
-  matjson::Value submissionsMetadata = matjson::Value::array();
-
   if (!std::filesystem::exists(m_queueDir)) {
-    log::info("Queue directory does not exist.");
+    log::error("Failed uploading: Queue directory does not exist.");
     return;
   }
 
   std::vector<std::filesystem::directory_entry> file_entries(
       (std::filesystem::directory_iterator(m_queueDir)), std::filesystem::directory_iterator());
 
+  // Clear unneeded files
+
+  std::vector<std::filesystem::directory_entry> evaluatedEntries;
+
   for (size_t i = 0; i < file_entries.size(); i++) {
-    auto entry = file_entries[i];
-    log::info("Found file: {}", entry.path().string());
-
-    if (!entry.is_regular_file())
-      continue;
-
-    if (entry.path().extension() != ".gdr")
-      continue;
-
-    const std::optional<int32_t> levelID = stringToInt32(entry.path().stem().string());
-    if (!levelID.has_value()) {
-      continue;
+    ReplayFileEvaluation evaluation = evalReplayFileForUpload(file_entries[i]);
+    log::info("Evaluation for file {}: {}", file_entries[i].path().filename().string(), static_cast<int>(evaluation));
+    if (evaluation == ReplayFileEvaluation::Delete) {
+      std::filesystem::remove(file_entries[i]);
+    } else if (evaluation == ReplayFileEvaluation::Ok) {
+      evaluatedEntries.push_back(file_entries[i]);
+      break;
     }
-
-    const uintmax_t fileSize = std::filesystem::file_size(entry.path());
-    // TODO: Get max size(5MB) dynamically from the server.
-    if (fileSize > 5 * 1024 * 1024) {
-      log::warn("File {} is too big to upload.", entry.path().string());
-      continue;
-    }
-
-    const std::string hashedContent = sha256FileContent(entry.path());
-
-    const matjson::Value submissionMetadata = matjson::makeObject({
-        {"levelID", levelID.value()},
-        {"replayHash", hashedContent},
-        {"modVersion", "1.0.0-alpha.1"},
-        {"gdVersion", "2.2074"},
-        {"_file_index", i},
-    });
-
-    submissionsMetadata.push(submissionMetadata);
   }
 
-  auto requestBody = matjson::makeObject({
-      {"dashAuthToken", getDashAuthToken().value()},
-      {"submissionsMetadata", submissionsMetadata},
+  if (evaluatedEntries.empty()) {
+    log::info("No files to upload.");
+    return;
+  }
+
+  auto submissionsInfo = matjson::Value::array();
+
+  for (auto entryPtr : evaluatedEntries) {
+    submissionsInfo.push(makeSubmissionInfo(entryPtr).unwrap());
+  }
+
+  const auto neededRequestBody = matjson::makeObject({
+    {"dashAuthToken", getDashAuthToken().value()},
+    {"submissions", submissionsInfo},
   });
 
-  m_needSubsReqListener.bind([this, submissionsMetadata, file_entries](web::WebTask::Event *e) {
+  m_neededSubsReqListener.bind([this, submissionsInfo, evaluatedEntries](web::WebTask::Event *e) {
     if (web::WebResponse *value = e->getValue()) {
       if (value->code() != 200) {
-        log::info("Error: got {} status code for needed_submissions.", value->code());
+        log::error("Error: got {} status code for needed_submissions.", value->code());
         if (!value->string().isErr()) {
-          log::info("needed_submissions failed due to: {}", value->string().unwrap());
+          log::error("needed_submissions failed due to: {}", value->string().unwrap());
         }
         return;
       }
 
-      auto jsonBody = value->json();
-      if (jsonBody.isErr()) {
-        log::info("Error while receiving needed_submissions: {}", jsonBody.unwrapErr());
+      if (value->json().isErr()) {
+        log::error("Error while parsing needed_submissions's response: {}", value->json().unwrapErr());
         return;
       }
 
-      matjson::Value submissions = matjson::Value::array();
-      auto needed = jsonBody.unwrap().asArray().unwrap();
-      for (size_t i = 0; i < submissionsMetadata.size(); ++i) {
-        if (!(needed[i].asBool().unwrap())) {
-          i++;
-          continue;
+      auto jsonBody = value->json().unwrap();
+
+      // Delete not needed files
+      if (jsonBody.contains("notNeeded") && jsonBody["notNeeded"].isArray()) {
+        std::vector<matjson::Value> notNeeded = jsonBody["notNeeded"].asArray().unwrap();
+        for (auto notNeededIndex : notNeeded) {
+          if (!notNeededIndex.isNumber()) {
+            continue;
+          }
+          std::filesystem::remove(evaluatedEntries[notNeededIndex.asInt().unwrap()]);
         }
+      }
 
-        auto &subMetadata = submissionsMetadata[i];
+      if (jsonBody.contains("submit") && jsonBody["submit"].isNumber()) {
+        int chosenSubmissionIndex = jsonBody["submit"].asInt().unwrap();
+        auto chosenEntry = evaluatedEntries[chosenSubmissionIndex];
+        auto chosenSubmissionInfo = submissionsInfo[chosenSubmissionIndex];
+        chosenSubmissionInfo.set("dataBase64", base64FileContent(chosenEntry));
 
-        auto file_entry = file_entries[subMetadata["_file_index"].asInt().unwrap()];
-
-        const matjson::Value submission = matjson::makeObject({
-            {"metadata", subMetadata},
-            {"dataBase64", base64FileContent(file_entry.path())},
+        auto requestBody = matjson::makeObject({
+            {"dashAuthToken", getDashAuthToken().value()},
+            {"submission", chosenSubmissionInfo},
         });
 
-        submissions.push(submission);
+        m_uploadSubReqListener.bind([this, chosenEntry](web::WebTask::Event *e) {
+          if (web::WebResponse *value = e->getValue()) {
+            if (value->code() != 200) {
+              log::error("Error: got {} status code for upload_submission.", value->code());
+              if (!value->string().isErr()) {
+                log::error("upload_submission failed due to: {}", value->string().unwrap());
+              }
+              return;
+            }
+            if (std::filesystem::exists(chosenEntry)) {
+              std::filesystem::remove(chosenEntry);
+            }
+            log::info("Uploaded successfully.");
+          }
+        });
+
+        auto task = web::WebRequest()
+                        .bodyJSON(requestBody)
+                        .post(fmt::format("{}/upload_submission", SHOWCASE_SERVER));
+        m_uploadSubReqListener.setFilter(task);
       }
-
-      auto requestBody = matjson::makeObject({
-          {"dashAuthToken", getDashAuthToken().value()},
-          {"submissions", submissions},
-      });
-
-      log::info("Needed submissions: {}", submissions.size());
-
-      if (submissions.size() == 0) {
-        return;
-      }
-
-      auto task = web::WebRequest()
-                      .bodyJSON(requestBody)
-                      .post(fmt::format("{}/upload_submissions", SHOWCASE_SERVER));
-      m_uploadSubsReqListener.setFilter(task);
     } else if (web::WebProgress *progress = e->getProgress()) {
     } else if (e->isCancelled()) {
     }
   });
 
   auto task = web::WebRequest()
-                  .bodyJSON(requestBody)
+                  .bodyJSON(neededRequestBody)
                   .post(fmt::format("{}/needed_submissions", SHOWCASE_SERVER));
-  m_needSubsReqListener.setFilter(task);
+  m_neededSubsReqListener.setFilter(task);
 }

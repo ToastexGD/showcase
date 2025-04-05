@@ -6,67 +6,71 @@ self: {
 }: let
   inherit (lib) mkEnableOption mkOption types mkIf;
   cfg = config.services.showcaseServer;
-  inherit (self.packages.${pkgs.stdenv.hostPlatform.system}) showcase-server;
+  inherit (self.packages.${pkgs.stdenv.hostPlatform.system}) showcase-server vm-package-recipe;
+  vm-package = vm-package-recipe {
+    gdPath = cfg.gdDir;
+  };
+  vmBinary = "${vm-package}/bin/microvm-run";
 in {
   options.services.showcaseServer = {
     enable = mkEnableOption "showcaseServer";
-    dataDir = mkOption {
-      type = types.str;
-      default = "/var/lib/showcase-server/data";
-      description = "The directory to store data in";
-    };
     gdDir = mkOption {
       type = types.str;
-      default = "/var/lib/showcase-server/geometry-dash";
-      description = "The directory to store Geometry Dash files in";
+      default = "/var/lib/showcase-server/gd";
+      description = "The directory of Geometry Dash. Make sure the directory is writable by the dynamic user";
     };
-    # TODO, use this
-    serverPort = mkOption {
+    postgres = {
+      username = mkOption {
+        type = types.str;
+        default = "showcase";
+        description = "The username for the PostgreSQL database";
+      };
+      password = mkOption {
+        type = types.str;
+        default = "showcase";
+        description = "The password for the PostgreSQL database";
+      };
+      hostname = mkOption {
+        type = types.str;
+        default = "127.0.0.1";
+        description = "The PostgreSQL server hostname";
+      };
+      port = mkOption {
+        type = types.int;
+        default = 5432;
+        description = "The PostgreSQL server port";
+      };
+      databaseName = mkOption {
+        type = types.str;
+        default = "showcase";
+        description = "The PostgreSQL database name";
+      };
+    };
+    httpPort = mkOption {
       type = types.int;
       default = 8080;
-      description = "The port to run the Showcsae server on";
+      description = "The port to run the http server on";
     };
-    # TODO, use this
-    modSocketPort = mkOption {
-      type = types.int;
-      default = 8081;
-      description = "The local port to talk with the Showcsae mod on";
-    };
-    # TODO, use this
     hostname = mkOption {
       type = types.str;
       default = "127.0.0.1";
       description = "The hostname to bind to";
     };
-    user = mkOption {
-      type = types.str;
-      default = "showcase";
-      description = "User to run the service as";
-    };
-    userUID = mkOption {
-      type = types.int;
-      default = 1555;
-      description = "The User's UID";
-    };
-    createUser = mkOption {
-      type = types.bool;
-      default = true;
-      description = "Whether to create the user";
-    };
   };
 
   config = mkIf cfg.enable {
-    users = mkIf cfg.createUser {
-      users.${cfg.user} = {
-        uid = cfg.userUID;
-        description = "User for the Showcase server";
-        createHome = true;
-        isNormalUser = true;
-        home = cfg.dataDir;
-        group = cfg.user;
-      };
-      groups.${cfg.user} = {};
-    };
+    # security.wrappers.player_binary_suid = {
+    #   source = "${vmBinary}";
+    #   owner = "root";
+    #   group = "root";
+    #   # setuid = true;
+    #   permissions = "u+rx,g+rx,o+rx";
+    #   capabilities = "cap_net_admin+ep";
+    # };
+    environment.systemPackages = [
+      vm-package
+    ];
+
     systemd.services.showcase-server = {
       after = ["network-online.target"];
       wantedBy = ["multi-user.target"];
@@ -74,25 +78,26 @@ in {
       startLimitIntervalSec = 60;
       description = "Start Showcase server";
       serviceConfig = {
-        # username that systemd will look for; if it exists, it will start a service associated with that user
-        User = cfg.user;
-        # the command to execute when the service starts up
+        # DynamicUser = true;
+        StateDirectory = "showcase-server";
         ExecStart = pkgs.writeShellScript "showcase-server-exec-start" ''
-          ${showcase-server}/bin/showcase_server --data-dir ${cfg.dataDir} --gd-dir ${cfg.gdDir}
+          # remove the old directory
+          rm -rf /tmp/showcase-server
+          # make tmp dir in /tmp
+          mkdir -p /tmp/showcase-server
+          # make sure the directory is writable by the dynamic user
+          chown -R $USER:$USER /tmp/showcase-server
+          cd /tmp/showcase-server
+          ${showcase-server}/bin/showcase_server \
+            --gd-dir ${cfg.gdDir} \
+            --pg-username ${cfg.postgres.username} \
+            --pg-password ${cfg.postgres.password} \
+            --pg-hostname ${cfg.postgres.hostname} \
+            --pg-port ${toString cfg.postgres.port} \
+            --pg-database-name ${cfg.postgres.databaseName} \
+            --player-binary ${vmBinary} \
+            --http-port ${toString cfg.httpPort} \
         '';
-
-        Environment = [
-          "XDG_RUNTIME_DIR=/run/user/${toString cfg.userUID}"
-          "PATH=${lib.makeBinPath (with pkgs; [
-            coreutils
-            bashInteractive
-            systemd
-            wineWowPackages.unstable
-            cage
-            procps
-            lsof
-          ])}"
-        ];
       };
     };
   };

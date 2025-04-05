@@ -2,14 +2,16 @@
   description = "Showcase GD Mod";
 
   inputs = {
-    nixpkgs.url = "github:NixOS/nixpkgs/4aa36568d413aca0ea84a1684d2d46f55dbabad7";
+    nixpkgs.url = "github:NixOS/nixpkgs/a84ebe20c6bc2ecbcfb000a50776219f48d134cc";
     flake-utils.url = "github:numtide/flake-utils";
+    microvm.url = "github:flafydev/microvm.nix/2dd8d4559aae92880ddc7d6367015f970b16455c";
   };
 
   outputs = {
     self,
     flake-utils,
     nixpkgs,
+    microvm,
   }:
     flake-utils.lib.eachDefaultSystem (system: let
       pkgs = import nixpkgs {
@@ -18,6 +20,9 @@
     in {
       packages = {
         showcase-server = pkgs.callPackage ./server/nix/package.nix {};
+        vm-package-recipe = import ./server/nix/vm-package.nix {
+          inherit nixpkgs microvm;
+        };
       };
       devShells = {
         server = pkgs.mkShell {

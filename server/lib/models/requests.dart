@@ -1,23 +1,25 @@
+import 'dart:convert';
 import 'dart:typed_data';
-
 import 'package:convert/convert.dart';
 import 'package:json/json.dart';
 import 'package:server/models/database.dart';
 
 @JsonCodable()
-class RequestSubmissionMetadata {
+class RequestSubmissionInfo {
   final int levelID;
-  final String replayHash;
+  final int levelVersion;
+  final String? dataBase64;
   final String modVersion;
   final String gdVersion;
 
-  Uint8List get replayHashBytes => Uint8List.fromList(hex.decode(replayHash));
-
-  static RequestSubmissionMetadata fromDBSubmission(Submission submission) {
+  static RequestSubmissionInfo fromDBSubmission(Submission submission) {
     // TODO: JsonCodable doesn't create a regular constructor :(
-    return RequestSubmissionMetadata.fromJson({
+    return RequestSubmissionInfo.fromJson({
       "levelID": submission.levelID,
-      "replayHash": hex.encode(submission.replayHash),
+      "levelVersion": submission.levelVersion,
+      "dataBase64": submission.replayData != null
+          ? base64Encode(submission.replayData!)
+          : null,
       "modVersion": submission.modVersion,
       "gdVersion": submission.gdVersion,
     });
@@ -25,21 +27,15 @@ class RequestSubmissionMetadata {
 }
 
 @JsonCodable()
-class RequestSubmission {
-  final RequestSubmissionMetadata metadata;
-  final String dataBase64;
-}
-
-@JsonCodable()
 class NeededSubmissionsRequest {
   final String dashAuthToken;
-  final List<RequestSubmissionMetadata> submissionsMetadata;
+  final List<RequestSubmissionInfo> submissions;
 }
 
 @JsonCodable()
-class UploadSubmissionsRequest {
+class UploadSubmissionRequest {
   final String dashAuthToken;
-  final List<RequestSubmission> submissions;
+  final RequestSubmissionInfo submission;
 }
 
 @JsonCodable()

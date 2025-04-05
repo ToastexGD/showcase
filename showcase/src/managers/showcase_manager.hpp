@@ -3,7 +3,6 @@
 
 #include "../includes/geode.hpp"
 #include "../models/bot.hpp"
-#include "showcase_auto_manager.hpp"
 
 #define SHOWCASE_SERVER "https://showcase.flafy.dev"
 #define DASHAUTH_SERVER "https://dashend.firee.dev"
@@ -16,21 +15,21 @@ enum class ShowcaseBotState {
   Playing,
 };
 
-struct ShowcaseBotReplay : public gdr::Replay<ShowcaseBotReplay, gdr::Input> {
-  ShowcaseBotReplay() : Replay("ShowcaseBot", "1.0") {}
+struct ShowcaseBotReplay : public gdr::Replay<ShowcaseBotReplay, gdr::Input<>> {
+  ShowcaseBotReplay() : Replay("ShowcaseBot", 2) {}
 };
 
 class ShowcaseBotManager : public CCNode {
 protected:
-  friend class ShowcaseAutoManager;
-
   inline static ShowcaseBotManager *m_instance = nullptr;
   ShowcaseBotReplay m_replay;
   std::filesystem::path m_queueDir;
-  EventListener<web::WebTask> m_needSubsReqListener;
-  EventListener<web::WebTask> m_uploadSubsReqListener;
+  EventListener<web::WebTask> m_neededSubsReqListener;
+  EventListener<web::WebTask> m_uploadSubReqListener;
   EventListener<web::WebTask> m_verifyDashauthTokenListener;
-  EventListener<web::WebTask> m_getReplayListener;
+  std::string m_gdVersion;
+  std::string m_modVersion;
+  bool m_isCurrentRunPractice = false;
 
   std::optional<ShowcaseBotReplay> m_loadedReplay = std::nullopt;
 
@@ -38,12 +37,13 @@ protected:
   void setDashAuthToken(std::optional<std::string> token);
   std::optional<std::string> getDashAuthToken();
   void onTokenVerified();
+  Result<matjson::Value> makeSubmissionInfo(std::filesystem::directory_entry& entry);
 
-  void saveCurrentReplay(int32_t levelID);
-  void loadReplyFromQueueFile(int32_t levelID);
+  void saveCurrentReplay(int32_t levelID, int32_t levelVersion);
 
 public:
   ShowcaseBotState m_state = ShowcaseBotState::Idle;
+  EventListener<web::WebTask> m_getReplayListener;
 
   bool init() override;
   void onCommandProcessed(GJBaseGameLayer *baseGameLayer);
@@ -57,9 +57,9 @@ public:
   void loadPlayReplayButton(GJGameLevel *level, LevelInfoLayer *levelInfoLayer,
                             CCMenuItemSpriteExtra *playReplayButton);
 
-  std::vector<gdr::Input> getInputs(int frame);
+  std::vector<gdr::Input<>> getInputs(int frame);
 
-  static bool shouldLevelBeReplay(GJGameLevel* level);
+  bool shouldLevelBeReplay(GJGameLevel* level);
 
   void removeKeysSinceFrame(int frame);
 
@@ -67,10 +67,9 @@ public:
 
   bool isTermsAccepted();
 
-  void saveReplay(int level);
   void clearReplay();
 
-  void tryUpload();
+  void tryUploadSingle();
 
   static ShowcaseBotManager *get(bool create = true) {
     if (!create) {

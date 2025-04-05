@@ -10,6 +10,5 @@ buildDartApplication rec {
     "--enable-experiment=macros"
   ];
 
-  # pubspecLock = lib.importJSON ./pubspec.lock.json;
   autoPubspecLock = src + "/pubspec.lock";
 }

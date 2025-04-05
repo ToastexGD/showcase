@@ -46,4 +46,9 @@ struct SBLevelInfoLayer : geode::Modify<SBLevelInfoLayer, LevelInfoLayer> {
   void onButton(CCObject* sender) {
     ShowcaseBotManager::get()->onPlayReplayPressed(this);
   }
+
+  void onBack(CCObject* sender) {
+    ShowcaseBotManager::get()->m_getReplayListener.getFilter().cancel();
+    LevelInfoLayer::onBack(sender);
+  }
 };
