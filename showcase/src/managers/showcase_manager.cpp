@@ -236,7 +236,7 @@ bool ShowcaseBotManager::onLevelComplete(PlayLayer *playLayer) {
     return true;
   }
   case ShowcaseBotState::Playing: {
-    playLayer->resetLevelFromStart();
+    playLayer->
     return false;
   }
   }
